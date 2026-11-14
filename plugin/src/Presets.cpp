@@ -446,4 +446,89 @@ Preset presetFrom(PluginKind k, const std::string& name, PresetScope scope, uint
     return p;
 }
 
+std::string standaloneSessionPath(PluginKind k, const std::string& config)
+{
+    if (config.empty())
+        return std::string();
+    return config + "/" + (k == PluginKind::Winds ? "weidinger-session.txt" : "session.txt");
+}
+
+std::string formatStandaloneSession(PluginKind k, const StandaloneSession& s)
+{
+    Preset p = s.preset;
+    if (p.name.empty())
+        p.name = "Session";
+    p.scope = PresetScope::All;
+    std::string out = formatPreset(k, p);
+    if (s.hasUi && !s.ui.empty())
+        out += "state.ui = " + escape(s.ui) + "\n";
+    if (s.feltOriginal)
+        out += "diag.felt_original = 1\n";
+    return out;
+}
+
+bool parseStandaloneSession(PluginKind k, const std::string& text, StandaloneSession& out)
+{
+    StandaloneSession s;
+    if (!parsePreset(k, text, s.preset) || s.preset.scope != PresetScope::All)
+        return false;
+    std::istringstream in(text);
+    std::string line;
+    while (std::getline(in, line)) {
+        if (line.empty() || line[0] == '#')
+            continue;
+        const size_t eq = line.find('=');
+        if (eq == std::string::npos)
+            continue;
+        const std::string key = trim(line.substr(0, eq)), val = trim(line.substr(eq + 1));
+        if (key == "state.ui") {
+            s.ui = unescape(val);
+            s.hasUi = !s.ui.empty();
+        } else if (key == "diag.felt_original") {
+            s.feltOriginal = (val == "1" || val == "true");
+        }
+    }
+    out = std::move(s);
+    return true;
+}
+
+bool saveStandaloneSession(PluginKind k, const std::string& config, const StandaloneSession& s)
+{
+    const std::string path = standaloneSessionPath(k, config);
+    if (path.empty())
+        return false;
+    std::error_code ec;
+    std::filesystem::create_directories(config, ec);
+    if (ec)
+        return false;
+    const std::string tmp = path + ".tmp";
+    {
+        std::ofstream f(tmp, std::ios::trunc);
+        f << formatStandaloneSession(k, s);
+        if (!f)
+            return false;
+    }
+    std::filesystem::rename(tmp, path, ec);
+    if (ec) {
+        std::remove(tmp.c_str());
+        std::ofstream f(path, std::ios::trunc);
+        f << formatStandaloneSession(k, s);
+        return (bool)f;
+    }
+    return true;
+}
+
+bool loadStandaloneSession(PluginKind k, const std::string& config, StandaloneSession& out)
+{
+    const std::string path = standaloneSessionPath(k, config);
+    if (path.empty())
+        return false;
+    std::ifstream f(path);
+    if (!f)
+        return false;
+    std::stringstream ss;
+    ss << f.rdbuf();
+    return parseStandaloneSession(k, ss.str(), out);
+}
+
 } // namespace pe

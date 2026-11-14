@@ -96,4 +96,18 @@ std::string presetLabel(const std::vector<const Preset*>& offered, int current);
 Preset presetFrom(PluginKind k, const std::string& name, PresetScope scope, uint32_t body, const float* values,
                   const std::vector<std::pair<std::string, std::string>>& states);
 
+/// the standalone's saved session (`<config>/session.txt` or `weidinger-session.txt`): every parameter,
+/// every sound-carrying state, the UI state (`state.ui`), and whether the Felt tab's Original toggle is on
+struct StandaloneSession {
+    Preset preset;
+    std::string ui;
+    bool hasUi = false;
+    bool feltOriginal = false;
+};
+std::string standaloneSessionPath(PluginKind k, const std::string& config);
+std::string formatStandaloneSession(PluginKind k, const StandaloneSession& s);
+bool parseStandaloneSession(PluginKind k, const std::string& text, StandaloneSession& out);
+bool saveStandaloneSession(PluginKind k, const std::string& config, const StandaloneSession& s);
+bool loadStandaloneSession(PluginKind k, const std::string& config, StandaloneSession& out);
+
 } // namespace pe

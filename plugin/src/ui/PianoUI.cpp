@@ -101,6 +101,10 @@ public:
 
     ~PianoUI() override
     {
+        if (isStandalone() && fSessionLoaded) {
+            flushStandaloneSession();
+            flushWindowPlacement();
+        }
         fDiag.cancel();
         if (fLearnTarget >= 0)
             setDiag(kDiagLearnIn, 0.0f); // a closed UI leaves no control waiting: the DSP would keep the next CC
@@ -162,6 +166,7 @@ protected:
                 repaint(); // "building…" under the pad, "measuring…" under the felt's graph
             } else if (index == kDiagFeltOriginalOut) {
                 fFeltOriginal = value >= 0.5f; // what plays (this UI's click, another UI's, a fresh activation)
+                markSessionDirty();
                 repaint();
             }
             return; // the diagnostics never refresh the controls
@@ -171,63 +176,13 @@ protected:
             fDiag.setConcertPitch(value);
         if (index == kMorphX || index == kMorphY)
             askShippedFelt(); // the felt under the bends moves with the morph's point
+        markSessionDirty();
         changed(index);
         repaint();
     }
 
-    void stateChanged(const char* key, const char* value) override
+    void applyUiState(const UiState& st)
     {
-        // the host hands the UI the saved values as they were: migrated here as on the DSP side
-        // (the `ui` key is the UI's alone; StateVersion.hpp)
-        const std::string migrated = fRestore.apply(key, value != nullptr ? value : "");
-        if (std::strcmp(key, kStateVersionKey) == 0)
-            return;
-        value = migrated.c_str();
-        if (std::strcmp(key, "instrument") == 0) {
-            fChoice = choose(*fCatalog, value != nullptr ? value : "", kKind);
-            instrumentChanged();
-            return;
-        }
-        if (std::strcmp(key, "felt") == 0) {
-            if (fFeltDrag < 0) { // during a drag the host echoes what we set
-                PeFelt fe;
-                pe_felt_parse(value, &fe); // unreadable: none
-                fFelt.set(fe);
-            }
-            repaint();
-            return;
-        }
-        if (std::strcmp(key, "scale_file") == 0) {
-            fScaleFile = value != nullptr ? value : "";
-            repaint();
-            return;
-        }
-        if (std::strcmp(key, "morph") == 0) {
-            fMorphState = value != nullptr ? value : "";
-            askShippedFelt();
-            relayout();
-            repaint();
-            return;
-        }
-        if (std::strcmp(key, "velocity_curve") == 0) {
-            if (fCurveDrag < 0) { // during a drag the host echoes what we set
-                PeVelocityCurve c;
-                pe_velocity_curve_parse(value, &c); // unreadable: straight
-                fEdit.set(c);
-            }
-            repaint();
-            return;
-        }
-        if (std::strcmp(key, "ui") != 0)
-            return;
-        // a host's preset (DPF writes every state into the LV2 bundle's presets, this one at its default):
-        // the window stays as it is, and the plugin gets its state back
-        if (value != nullptr && formatUiState(UiState {}) == value) {
-            if (formatUiState(fState) != value)
-                saveState();
-            return;
-        }
-        const UiState st = parseUiState(value);
         const bool zoomChanged = st.zoom != fState.zoom;
         if (st.tab != fState.tab)
             fScroll = 0; // another tab: from its top, as a click on it
@@ -243,6 +198,67 @@ protected:
         }
         askShippedFelt(); // a session restored on the Felt tab
         repaint();
+    }
+
+    void stateChanged(const char* key, const char* value) override
+    {
+        // the host hands the UI the saved values as they were: migrated here as on the DSP side
+        // (the `ui` key is the UI's alone; StateVersion.hpp)
+        const std::string migrated = fRestore.apply(key, value != nullptr ? value : "");
+        if (std::strcmp(key, kStateVersionKey) == 0)
+            return;
+        value = migrated.c_str();
+        if (std::strcmp(key, "instrument") == 0) {
+            fChoice = choose(*fCatalog, value != nullptr ? value : "", kKind);
+            markSessionDirty();
+            instrumentChanged();
+            return;
+        }
+        if (std::strcmp(key, "felt") == 0) {
+            if (fFeltDrag < 0) { // during a drag the host echoes what we set
+                PeFelt fe;
+                pe_felt_parse(value, &fe); // unreadable: none
+                fFelt.set(fe);
+            }
+            markSessionDirty();
+            repaint();
+            return;
+        }
+        if (std::strcmp(key, "scale_file") == 0) {
+            fScaleFile = value != nullptr ? value : "";
+            markSessionDirty();
+            repaint();
+            return;
+        }
+        if (std::strcmp(key, "morph") == 0) {
+            fMorphState = value != nullptr ? value : "";
+            markSessionDirty();
+            askShippedFelt();
+            relayout();
+            repaint();
+            return;
+        }
+        if (std::strcmp(key, "velocity_curve") == 0) {
+            if (fCurveDrag < 0) { // during a drag the host echoes what we set
+                PeVelocityCurve c;
+                pe_velocity_curve_parse(value, &c); // unreadable: straight
+                fEdit.set(c);
+            }
+            markSessionDirty();
+            repaint();
+            return;
+        }
+        if (std::strcmp(key, "ui") != 0)
+            return;
+        // a host's preset (DPF writes every state into the LV2 bundle's presets, this one at its default):
+        // the window stays as it is, and the plugin gets its state back
+        if (value != nullptr && formatUiState(UiState {}) == value) {
+            if (formatUiState(fState) != value)
+                saveState();
+            return;
+        }
+        applyUiState(parseUiState(value));
+        markSessionDirty();
     }
 
     void uiScaleFactorChanged(double scaleFactor) override
@@ -604,6 +620,13 @@ private:
     CatalogPtr fCatalog; // the instruments found (Catalog.hpp)
     StateRestore fRestore; // the restored state's version (StateVersion.hpp)
     bool fTitled = false;  // the standalone's window title set (uiIdle)
+    bool fRestoringSession = false;
+    bool fSessionLoaded = false;
+    bool fSessionDirty = false;
+    uint64_t fSessionChangedMs = 0;
+    WindowPlacementState fWindowPlacement {};
+    bool fWindowPlacementDirty = false;
+    uint64_t fWindowPlacementChangedMs = 0;
     Choice fChoice;      // the "instrument" state: the id and its entry (nullptr: missing)
     UiState fState;
     Layout fLayout;
@@ -751,6 +774,8 @@ private:
         if (!std::isfinite(v) || v == fValues[i])
             return;
         fValues[i] = v;
+        if (i == kConcertPitch)
+            fDiag.setConcertPitch(v);
         setParameterValue(i, v);
         const uint32_t other = exclusiveStop(i);
         if (other < kParamCount && v >= 0.5f && fValues[other] >= 0.5f) {
@@ -758,6 +783,7 @@ private:
             setParam(other, 0.0f);
             editParameter(other, false);
         }
+        markSessionDirty();
         changed(i);
         repaint();
     }
@@ -794,6 +820,7 @@ private:
             if (kept.size() != before.size())
                 placeMorphPoint(morphPointAfter(before.size(), kept.size(), { fValues[kMorphX], fValues[kMorphY] }));
         }
+        markSessionDirty();
         instrumentChanged();
     }
 
@@ -871,7 +898,11 @@ private:
     static uint64_t nowMs() { return (uint64_t)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
     WindowResizeTracker fWindowResize;
 
-    void saveState() { setState("ui", formatUiState(fState).c_str()); }
+    void saveState()
+    {
+        setState("ui", formatUiState(fState).c_str());
+        markSessionDirty();
+    }
 
     // the diagnostics at the window's bottom (window-logical coordinates, not scrolled)
     DiagView fDiag { DiagHost {
@@ -991,6 +1022,7 @@ private:
         }
         fScaleFile = path;
         setState("scale_file", path);
+        markSessionDirty();
         editParameter(kTemperament, true);
         setParam(kTemperament, (float)pe_temperament_count());
         editParameter(kTemperament, false);
@@ -1439,13 +1471,101 @@ private:
         }
     }
 
+    bool isStandalone() const { return std::strcmp(getPluginFormatName(), "JACK/Standalone") == 0; }
+
+    void markSessionDirty()
+    {
+        if (!fRestoringSession && isStandalone() && fSessionLoaded) {
+            fSessionDirty = true;
+            fSessionChangedMs = nowMs();
+        }
+    }
+
+    StandaloneSession captureStandaloneSession() const
+    {
+        StandaloneSession s;
+        s.preset = presetFrom(kKind, "Session", PresetScope::All, bodyNow(), fValues, currentStates());
+        s.ui = formatUiState(fState);
+        s.hasUi = true;
+        s.feltOriginal = fFeltOriginal;
+        return s;
+    }
+
+    void flushStandaloneSession()
+    {
+        if (!isStandalone() || !fSessionLoaded)
+            return;
+        fSessionDirty = false;
+        saveStandaloneSession(kKind, dataDirs().config, captureStandaloneSession());
+    }
+
+    void pollWindowPlacement()
+    {
+        WindowPlacementState cur = fWindowPlacement;
+        cur.zoom = fState.zoom;
+        if (queryWindowPlacementFromNativeWindow(getWindow().getNativeWindowHandle(), cur)) {
+            if (cur.zoom != fWindowPlacement.zoom || cur.hasBounds != fWindowPlacement.hasBounds
+                || cur.x != fWindowPlacement.x || cur.y != fWindowPlacement.y
+                || cur.width != fWindowPlacement.width || cur.height != fWindowPlacement.height
+                || cur.maximized != fWindowPlacement.maximized) {
+                fWindowPlacement = cur;
+                fWindowPlacementDirty = true;
+                fWindowPlacementChangedMs = nowMs();
+            }
+        }
+        if (fWindowPlacementDirty && nowMs() - fWindowPlacementChangedMs >= 200) {
+            fWindowPlacementDirty = false;
+            saveWindowPlacement(dataDirs().config, fWindowPlacement);
+        }
+    }
+
+    void flushWindowPlacement()
+    {
+        if (!isStandalone() || !fSessionLoaded)
+            return;
+        WindowPlacementState cur = fWindowPlacement;
+        cur.zoom = fState.zoom;
+        if (queryWindowPlacementFromNativeWindow(getWindow().getNativeWindowHandle(), cur))
+            fWindowPlacement = cur;
+        fWindowPlacementDirty = false;
+        saveWindowPlacement(dataDirs().config, fWindowPlacement);
+    }
+
+    void restoreStandaloneSession()
+    {
+        fRestoringSession = true;
+        fWindowPlacement = loadWindowPlacement(dataDirs().config);
+        StandaloneSession s;
+        if (loadStandaloneSession(kKind, dataDirs().config, s)) {
+            applyPreset(s.preset);
+            if (s.feltOriginal != fFeltOriginal) {
+                fFeltOriginal = s.feltOriginal;
+                setDiag(kDiagFeltOriginalIn, panicNext(fValues[kDiagFeltOriginalIn]));
+            }
+            if (s.hasUi) {
+                const UiState st = parseUiState(s.ui.c_str());
+                applyUiState(st);
+                saveState();
+            }
+        }
+        fWindowPlacement.zoom = fState.zoom;
+        applyWindowPlacementToNativeWindow(getWindow().getNativeWindowHandle(), fWindowPlacement);
+        queryWindowPlacementFromNativeWindow(getWindow().getNativeWindowHandle(), fWindowPlacement);
+        saveWindowPlacement(dataDirs().config, fWindowPlacement);
+        fRestoringSession = false;
+        fSessionLoaded = true;
+        fSessionDirty = false;
+    }
+
     void uiIdle() override
     {
         // the standalone's window: the plugin's name alone (DPF titles it "maker: name")
         if (!fTitled) {
             fTitled = true;
-            if (std::strcmp(getPluginFormatName(), "JACK/Standalone") == 0)
+            if (isStandalone()) {
                 getWindow().setTitle(identity(kKind).name);
+                restoreStandaloneSession();
+            }
         }
         // the worker rescanned the instrument folders (a new one appeared, as the editor's preview)
         if (const CatalogPtr c = sharedCatalog(resources()); c != fCatalog) {
@@ -1463,6 +1583,11 @@ private:
         }
         pollNotes();
         pollMirror();
+        if (isStandalone() && fSessionLoaded) {
+            pollWindowPlacement();
+            if (fSessionDirty && !tipBusy() && nowMs() - fSessionChangedMs >= 250)
+                flushStandaloneSession();
+        }
         // the armed Reset falls back after its 3 s
         if (fResetShown != resetArmed()) {
             fResetShown = resetArmed();
@@ -1967,6 +2092,7 @@ private:
     void commitCurve()
     {
         setState("velocity_curve", fEdit.text().c_str());
+        markSessionDirty();
         repaint();
     }
 
@@ -2140,6 +2266,7 @@ private:
     void commitFelt()
     {
         setState("felt", fFelt.text().c_str());
+        markSessionDirty();
         repaint();
     }
 
@@ -2156,6 +2283,7 @@ private:
         if (fLayout.feltOriginal.contains(p.x, p.y)) {
             fFeltOriginal = !fFeltOriginal; // shown at once; kDiagFeltOriginalOut confirms it
             setDiag(kDiagFeltOriginalIn, panicNext(fValues[kDiagFeltOriginalIn])); // a flip, as Panic's
+            markSessionDirty();
             repaint();
             return true;
         }
@@ -2455,6 +2583,7 @@ private:
         ids = validPartners(ids, *fCatalog, fChoice.id);
         fMorphState = formatPartners(ids);
         setState("morph", fMorphState.c_str());
+        markSessionDirty();
         const Point2 here { fValues[kMorphX], fValues[kMorphY] }, there = morphPointAfter(before, ids.size(), here);
         if (there.x != here.x || there.y != here.y)
             placeMorphPoint(there);
@@ -2469,6 +2598,7 @@ private:
             fValues[i] = i == kMorphX ? c.x : c.y;
             setParameterValue(i, fValues[i]);
         }
+        markSessionDirty();
         repaint();
     }
 
@@ -2483,6 +2613,7 @@ private:
             setParameterValue(i, fValues[i]);
             editParameter(i, false);
         }
+        markSessionDirty();
         repaint();
     }
 

@@ -12,8 +12,24 @@ extern const int kZoomSteps[8];
 UiState parseUiState(const char* s);
 std::string formatUiState(const UiState& s);
 
-/// The scale kept for the next window (the standalone has no session to keep it): `<config>/window.txt`
-/// ("zoom=150"), written when the scale is picked. `config` empty: none known (nothing kept).
+/// The scale and standalone window placement kept for the next window: `<config>/window.txt`
+/// ("zoom=150", plus x/y/width/height/maximized when known). `config` empty: none known (nothing kept).
+struct WindowPlacementState {
+    int zoom = 100;
+    bool hasBounds = false;
+    int x = 0, y = 0;
+    uint32_t width = 0, height = 0;
+    bool maximized = false;
+};
+WindowPlacementState parseWindowPlacement(const std::string& text);
+std::string formatWindowPlacement(const WindowPlacementState& s);
+WindowPlacementState loadWindowPlacement(const std::string& config);
+bool saveWindowPlacement(const std::string& config, const WindowPlacementState& s);
+void centerWindowRect(int workLeft, int workTop, int workRight, int workBottom, int winW, int winH, int& outX, int& outY);
+void clampWindowRectToWorkArea(int workLeft, int workTop, int workRight, int workBottom, int& x, int& y, uint32_t& w, uint32_t& h);
+void applyWindowPlacementToNativeWindow(uintptr_t nativeWindowHandle, const WindowPlacementState& wp);
+bool queryWindowPlacementFromNativeWindow(uintptr_t nativeWindowHandle, WindowPlacementState& wp);
+
 int parseSavedZoom(const std::string& text);   // a zoom step, else 100
 int loadSavedZoom(const std::string& config);   // 100 without the file
 bool saveZoom(const std::string& config, int zoom); // the folder made if missing
