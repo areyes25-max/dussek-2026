@@ -40,12 +40,14 @@ JACK `system:playback_1` and `_2`; a mono device takes both). A session manager 
 that links them first wins; `DUSSEK_AUTOCONNECT=0` turns it off.
 
 Without a JACK server the standalone plays on its own audio (DPF's fallback: CoreAudio on macOS,
-WASAPI on Windows, PulseAudio or ALSA on Linux) to the default output. It opens every MIDI input
-present at start; the MIDI tab then has an **Audio and MIDI** row: the buffer size (128 … 1024
-frames) and **Rescan**, which opens the MIDI inputs plugged in since (it reopens them all, so a
-held note stops). In a host and under JACK the row is not shown. On Linux the fallback does not
-play yet (RtAudio rejects PulseAudio's default output); JACK, or PipeWire's JACK layer, is the
-way there.
+WASAPI, ASIO, or DirectSound on Windows, PulseAudio or ALSA on Linux) to the chosen output. It opens
+every MIDI input present at start; the MIDI tab then has an **Audio and MIDI** section: **Audio engine**
+(WASAPI, ASIO, DirectSound on Windows), **Audio device** (and **ASIO control panel…** when ASIO is
+active), the buffer size (128 … 1024 frames) and **Rescan**, which opens the MIDI inputs plugged in
+since (it reopens them all, so a held note stops). The chosen audio engine, device, and buffer size
+are saved in `audio.txt` in the config folder and restored on the next launch. In a host and under
+JACK the section is not shown. On Linux the fallback does not play yet (RtAudio rejects PulseAudio's
+default output); JACK, or PipeWire's JACK layer, is the way there.
 
 LV2 hosts need the worker feature, as Ardour, Carla and Jalv have. Without it, the velocity
 curve's edits do not reach the sound.

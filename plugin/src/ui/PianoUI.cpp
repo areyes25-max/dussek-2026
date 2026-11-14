@@ -30,6 +30,7 @@
 #include "Params.hpp"
 #include "PedalMixer.hpp"
 #include "Presets.hpp"
+#include "StandaloneAudio.hpp"
 #include "Theme.hpp"
 #include "Tooltip.hpp"
 #include "StateVersion.hpp"
@@ -57,6 +58,7 @@ using namespace pe;
 
 /// the instrument menu's last entry
 static const char* const kOpenFolder = "Open instrument folder…";
+static const char* const kAsioControlPanel = "ASIO control panel…";
 
 class PianoUI : public UI
 {
@@ -1059,10 +1061,12 @@ private:
     int panicTip() const { return (int)fLayout.rows.size(); }
     int menuTip() const { return (int)fLayout.rows.size() + 1; }
     int curveTip() const { return (int)fLayout.rows.size() + 2; }
-    /// the MIDI tab's switches, then its rows
+    /// the MIDI tab's switches, standalone audio rows, then its rows
     int programTip() const { return (int)fLayout.rows.size() + 3; }
     int takeoverTip() const { return (int)fLayout.rows.size() + 4; }
-    int midiTip(size_t k) const { return (int)fLayout.rows.size() + 5 + (int)k; }
+    int audioEngineTip() const { return (int)fLayout.rows.size() + 5; }
+    int audioDeviceTip() const { return (int)fLayout.rows.size() + 6; }
+    int midiTip(size_t k) const { return (int)fLayout.rows.size() + 7 + (int)k; }
     /// the Morph tab's: 0 the plus, 1 the pad, then per row 2 + 4k + (0 the row, 1 up, 2 down, 3 remove)
     int morphTip(int i) const { return midiTip(fLayout.midiRows.size()) + i; }
 
@@ -1090,7 +1094,21 @@ private:
             drawTooltip(*this, box, kCurveTitle, kCurveDescription, kCurveGestures);
             return;
         }
-        if (fTipShown >= programTip() && (size_t)(fTipShown - programTip()) <= fLayout.midiRows.size() + 1) {
+        if (fTipShown == audioEngineTip() || fTipShown == audioDeviceTip()) {
+            const bool isEngine = fTipShown == audioEngineTip();
+            const Rect& a = isEngine ? fLayout.audioEngine : fLayout.audioDevice;
+            const char* title = isEngine ? kAudioEngineTitle : kAudioDeviceTitle;
+            const char* body = isEngine ? kAudioEngineDescription : kAudioDeviceDescription;
+            const char* gestures = "Click to choose";
+            const float vw = getWidth() / uiScale(), vh = viewHeight();
+            const float w = std::min(kTooltipW, vw - 8);
+            const Rect b = shown(a, true, fScroll);
+            const Rect box = tooltipRect(b, b.x + std::min(textWidth(title) + 8, b.w * 0.35f), w,
+                tooltipHeight(*this, w, title, body, gestures), vw, vh);
+            drawTooltip(*this, box, title, body, gestures);
+            return;
+        }
+        if (fTipShown >= programTip() && (size_t)(fTipShown - programTip()) <= fLayout.midiRows.size() + 3) {
             const bool program = fTipShown == programTip(), takeover = fTipShown == takeoverTip(), sw = program || takeover;
             const Rect a = program ? fLayout.programSwitch : takeover ? fLayout.takeoverSwitch : fLayout.midiRows[(size_t)(fTipShown - midiTip(0))].rect;
             const uint32_t target = sw ? kParamCount : midiTarget(fLayout.midiRows[(size_t)(fTipShown - midiTip(0))]);
@@ -1760,6 +1778,7 @@ private:
         fLearnMenu = -1;
         fLearnPair = false;
         fMorphMenu = false;
+        fAudioMenu = 0;
     }
 
     /// shows group g's instruments beside the instrument menu's list
@@ -1789,6 +1808,32 @@ private:
 
     void clickList(Point2 p)
     {
+        if (fAudioMenu != 0) {
+            const int which = fAudioMenu;
+            fAudioMenu = 0;
+            if (fListRect.contains(p.x, p.y)) {
+                const int i = listRow(p.y);
+                if (i >= 0 && (size_t)i < fListItems.size()) {
+                    const std::string chosen = fListItems[(size_t)i];
+                    const Rect anchor = shown(which == 1 ? fLayout.audioEngine : fLayout.audioDevice, true, fScroll);
+                    if (which == 1) {
+                        std::string err;
+                        if (!selectStandaloneAudioEngine(chosen, &err))
+                            showNote("Audio engine", err.empty() ? "Could not switch audio engine." : err, anchor, 4000);
+                    } else if (chosen == kAsioControlPanel) {
+                        if (!openStandaloneAudioControlPanel())
+                            showNote("ASIO", "The driver's ASIO control panel could not be opened.", anchor, 4000);
+                    } else {
+                        std::string err;
+                        if (!selectStandaloneAudioDevice(chosen, &err))
+                            showNote("Audio device", err.empty() ? "Could not open audio device." : err, anchor, 4000);
+                    }
+                }
+            }
+            updateHover(fPointerX, fPointerY);
+            repaint();
+            return;
+        }
         if (fMorphMenu) { // the plus button's instruments
             fMorphMenu = false;
             if (fListRect.contains(p.x, p.y)) {
@@ -2270,7 +2315,7 @@ private:
     uint32_t fMirrorSeqs[kParamCount] {};
     float fInstrumentOut = 0;
 
-    bool listOpen() const { return fListParam >= 0 || fMenuList || fLearnMenu >= 0 || fMorphMenu; }
+    bool listOpen() const { return fListParam >= 0 || fMenuList || fLearnMenu >= 0 || fMorphMenu || fAudioMenu != 0; }
 
     void setDiag(uint32_t index, float v)
     {
@@ -2549,6 +2594,23 @@ private:
             drawCompactRow(*this, r, c);
         }
         if (fLayout.rescanMidi.w > 0) { // the standalone on its own audio
+            const float audioLabelW = std::min(textWidth("Audio engine") + 8, fLayout.audioEngine.w * 0.35f);
+            for (int i = 0; i < 2; ++i) {
+                const Rect& s = i == 0 ? fLayout.audioEngine : fLayout.audioDevice;
+                if (s.w <= 0)
+                    continue;
+                const char* const title = i == 0 ? kAudioEngineTitle : kAudioDeviceTitle;
+                std::string val = i == 0 ? currentStandaloneAudioEngine() : currentStandaloneAudioDevice();
+                if (val.empty())
+                    val = "Default";
+                Row r { kParamCount, Kind::Dropdown, s };
+                r.compact = true;
+                r.label = { s.x, s.y, audioLabelW, s.h };
+                r.control = { s.x + audioLabelW + 8, s.y, std::max(1.0f, s.w - audioLabelW - 8), s.h };
+                r.value = r.control;
+                ControlLook c { title, val, 0.0f, true, fHotAudio == i + 1 || fAudioMenu == i + 1, false, nullptr };
+                drawCompactRow(*this, r, c);
+            }
             fontSize(theme::fontSize);
             fillColor(theme::dim);
             textAlign(ALIGN_LEFT | ALIGN_MIDDLE);
@@ -2567,8 +2629,54 @@ private:
         }
     }
 
+    int fAudioMenu = 0; // 1: Audio engine dropdown, 2: Audio device dropdown
+    int fHotAudio = 0;  // 1: Audio engine hovered, 2: Audio device hovered
+
+    void openAudioMenu(int which)
+    {
+        fListParam = -1;
+        fSubGroup = fSubHot = fListHot = -1;
+        closeMenu();
+        fListItems.clear();
+        fListValues.clear();
+
+        const std::string cur = which == 1 ? currentStandaloneAudioEngine() : currentStandaloneAudioDevice();
+        if (which == 1) {
+            fListItems = standaloneAudioEngines();
+            if (fListItems.empty())
+                fListItems.push_back(cur.empty() ? "Default" : cur);
+        } else {
+            fListItems = standaloneAudioDevices();
+            if (fListItems.empty())
+                fListItems.push_back(cur.empty() ? "Default" : cur);
+            if (hasStandaloneAudioControlPanel())
+                fListItems.push_back(kAsioControlPanel);
+        }
+
+        fListSelected = -1;
+        const std::string match = cur.empty() ? "Default" : cur;
+        for (size_t i = 0; i < fListItems.size(); ++i)
+            if (fListItems[i] == match)
+                fListSelected = (int)i;
+
+        fAudioMenu = which;
+        const Rect& s = which == 1 ? fLayout.audioEngine : fLayout.audioDevice;
+        const float audioLabelW = std::min(textWidth("Audio engine") + 8, s.w * 0.35f);
+        const Rect ctrl { s.x + audioLabelW + 8, s.y, std::max(1.0f, s.w - audioLabelW - 8), s.h };
+        placeList(shown(ctrl, true, fScroll));
+        repaint();
+    }
+
     bool clickMidiTab(Point2 p)
     {
+        if (fLayout.audioEngine.w > 0 && fLayout.audioEngine.contains(p.x, p.y)) {
+            openAudioMenu(1);
+            return true;
+        }
+        if (fLayout.audioDevice.w > 0 && fLayout.audioDevice.contains(p.x, p.y)) {
+            openAudioMenu(2);
+            return true;
+        }
         if (fLayout.rescanButton.contains(p.x, p.y)) {
             if (supportsMIDI())
                 requestMIDI();
@@ -2673,7 +2781,7 @@ private:
             }
             return;
         }
-        if (fListParam >= 0 || fLearnMenu >= 0 || fMorphMenu) {
+        if (fListParam >= 0 || fLearnMenu >= 0 || fMorphMenu || fAudioMenu != 0) {
             const int h = fListRect.contains(w.x, w.y) ? listRow(w.y) : -1;
             if (h != fListHot) { fListHot = h; repaint(); }
             return;
@@ -2701,6 +2809,8 @@ private:
             if (fLayout.midiRows[k].rect.contains(p.x, p.y))
                 hotMidi = (int)k;
         const int hotSwitch = !inC ? 0 : fLayout.programSwitch.contains(p.x, p.y) ? 1 : fLayout.takeoverSwitch.contains(p.x, p.y) ? 2 : 0;
+        const int hotAudio = !inC ? 0 : (fLayout.audioEngine.w > 0 && fLayout.audioEngine.contains(p.x, p.y)) ? 1
+            : (fLayout.audioDevice.w > 0 && fLayout.audioDevice.contains(p.x, p.y)) ? 2 : 0;
         int hotMorph = -1;
         if (inC && tab() == kTabMorph) {
             if (fLayout.morphPlus.contains(p.x, p.y))
@@ -2716,8 +2826,11 @@ private:
         }
         const bool hotCopy = inC && tab() == kTabAbout && fLayout.aboutCopy.contains(p.x, p.y);
         if (hotCopy != fHotCopyLink) { fHotCopyLink = hotCopy; repaint(); }
-        if (hotMidi != fHotMidi || hotSwitch != fHotSwitch) { fHotMidi = hotMidi; fHotSwitch = hotSwitch; repaint(); }
+        if (hotMidi != fHotMidi || hotSwitch != fHotSwitch || hotAudio != fHotAudio) {
+            fHotMidi = hotMidi; fHotSwitch = hotSwitch; fHotAudio = hotAudio; repaint();
+        }
         fTip.hover(hotPanic ? panicTip() : hotMenu ? menuTip() : overCurve ? curveTip() : hotSwitch == 1 ? programTip() : hotSwitch == 2 ? takeoverTip()
+                : hotAudio == 1 ? audioEngineTip() : hotAudio == 2 ? audioDeviceTip()
                 : hotMidi >= 0 ? midiTip((size_t)hotMidi) : hotMorph >= 0 ? hotMorph : hotRow, nowMs());
         if (hotPanic != fHotPanic) { fHotPanic = hotPanic; repaint(); }
         if (hotMenu != fHotMenu) { fHotMenu = hotMenu; repaint(); }

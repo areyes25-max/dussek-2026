@@ -52,8 +52,21 @@ foreach(p ${PE_PLUGINS})
     FILES_UI src/ui/PianoUI.cpp src/ui/Widgets.cpp src/ui/Panel.cpp src/ui/DiagView.cpp src/ui/DiagPanel.cpp src/ui/VizPanel.cpp src/ui/MicView.cpp)
   target_include_directories(${p} PUBLIC src src/plugins/${p})
   target_link_libraries(${p} PUBLIC Threads::Threads ${CMAKE_DL_LIBS} m)
-  # the standalone's `render` command (midi2wav's code through pe_cli), before DPF's main
-  target_sources(${p}-jack PRIVATE src/StandaloneCli.cpp)
+  # the standalone's `render` command (midi2wav's code through pe_cli), before DPF's main, and
+  # StandaloneMain.cpp so Windows standalone builds include WASAPI, ASIO, and DirectSound with
+  # runtime audio engine and device selection.
+  get_target_property(_jack_sources ${p}-jack SOURCES)
+  list(FILTER _jack_sources EXCLUDE REGEX "DistrhoPluginMain\\.cpp$")
+  list(APPEND _jack_sources
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/StandaloneMain.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/StandaloneCli.cpp")
+  set_target_properties(${p}-jack PROPERTIES SOURCES "${_jack_sources}")
+  target_include_directories(${p}-jack PRIVATE
+    src/asio
+    ${CMAKE_CURRENT_SOURCE_DIR}/dpf/distrho/src/jackbridge)
+  if(WIN32)
+    target_link_libraries(${p}-jack PRIVATE dsound ole32 advapi32 uuid)
+  endif()
 endforeach()
 
 # the standalones' window icon (in a host the window is the host's): on X11 DPF sets _NET_WM_ICON from the array
@@ -72,7 +85,7 @@ elseif(WIN32)
 endif()
 
 # pure logic shared by the DSP and the UI, and its tests (no window)
-add_library(pe_common STATIC src/Autoconnect.cpp src/Catalog.cpp src/Params.cpp src/Ports.cpp src/EngineValues.cpp src/PedalMixer.cpp src/ui/About.cpp src/ui/BuildInfo.cpp src/ui/Format.cpp src/ui/Instruments.cpp src/ui/Layout.cpp src/ui/MicMap.cpp src/ui/Spectro.cpp src/ui/Strip.cpp src/ui/StripInteraction.cpp src/ui/Viz.cpp src/ui/Tooltip.cpp src/ui/UiState.cpp src/SharedRegion.cpp src/ui/TelemetryClient.cpp src/ui/CurveEdit.cpp src/ui/FeltEditor.cpp src/ui/NoteHistory.cpp src/MidiMap.cpp src/MidiRoute.cpp src/Morph.cpp src/FileWatch.cpp src/Presets.cpp src/Paths.cpp src/Numbers.cpp src/StateVersion.cpp src/ui/GlCheck.cpp)
+add_library(pe_common STATIC src/Autoconnect.cpp src/Catalog.cpp src/Params.cpp src/Ports.cpp src/EngineValues.cpp src/PedalMixer.cpp src/StandaloneAudio.cpp src/ui/About.cpp src/ui/BuildInfo.cpp src/ui/Format.cpp src/ui/Instruments.cpp src/ui/Layout.cpp src/ui/MicMap.cpp src/ui/Spectro.cpp src/ui/Strip.cpp src/ui/StripInteraction.cpp src/ui/Viz.cpp src/ui/Tooltip.cpp src/ui/UiState.cpp src/SharedRegion.cpp src/ui/TelemetryClient.cpp src/ui/CurveEdit.cpp src/ui/FeltEditor.cpp src/ui/NoteHistory.cpp src/MidiMap.cpp src/MidiRoute.cpp src/Morph.cpp src/FileWatch.cpp src/Presets.cpp src/Paths.cpp src/Numbers.cpp src/StateVersion.cpp src/ui/GlCheck.cpp)
 target_include_directories(pe_common PUBLIC src src/ui)
 # the shipped full presets, each plugin's (presets/dussek/*.dussek-preset, presets/weidinger/*.weidinger-preset),
 # embedded as text: Presets.cpp parses them (the files name instruments, which the code may not)

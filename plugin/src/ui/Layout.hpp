@@ -53,8 +53,9 @@ struct Layout {
     // Previous instrument where untied, then the program change switch's row
     std::vector<MidiRow> midiRows;
     Rect programSwitch, takeoverSwitch;
-    // the standalone on its own audio (UiContext::nativeAudio), under the switches: the buffer
-    // sizes' chips, and the MIDI inputs' row with its Rescan button
+    // the standalone on its own audio (UiContext::nativeAudio), under the switches: the audio
+    // engine and device dropdowns, the buffer sizes' chips, and the MIDI inputs' row with its Rescan button
+    Rect audioEngine, audioDevice;
     Rect bufferChips[4], rescanMidi, rescanButton;
     // the Morph tab (empty on the others), in layout coordinates: a row per instrument, the plus
     // button under them (`morphFull`: the list holds kMorphMax, it adds none), the pad (a line under
