@@ -37,6 +37,8 @@ struct StandaloneAudioBackend {
 
     std::function<bool()> hasControlPanel;
     std::function<bool()> openControlPanel;
+
+    std::function<std::vector<std::string>()> getMidiInputs;
 };
 
 void setStandaloneAudioBackend(StandaloneAudioBackend backend);
@@ -52,5 +54,7 @@ bool selectStandaloneAudioDevice(const std::string& device, std::string* errorOu
 
 bool hasStandaloneAudioControlPanel();
 bool openStandaloneAudioControlPanel();
+
+std::vector<std::string> standaloneMidiInputs();
 
 }  // namespace pe

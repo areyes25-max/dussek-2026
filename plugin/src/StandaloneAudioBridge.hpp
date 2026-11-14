@@ -9,16 +9,25 @@
 # define __WINDOWS_ASIO__
 # define __WINDOWS_DS__
 # define __WINDOWS_MM__
+# define RTAUDIO_API_TYPE WINDOWS_WASAPI
+# define RTMIDI_API_TYPE WINDOWS_MM
 #elif defined(DISTRHO_OS_MAC)
 # define __MACOSX_CORE__
+# define RTAUDIO_API_TYPE MACOSX_CORE
+# define RTMIDI_API_TYPE MACOSX_CORE
 #elif defined(DISTRHO_OS_LINUX)
 # if defined(HAVE_ALSA) && defined(HAVE_PULSEAUDIO)
 #  define __LINUX_PULSE__
 #  define __LINUX_ALSA__
+#  define RTAUDIO_API_TYPE LINUX_PULSE
+#  define RTMIDI_API_TYPE LINUX_ALSA
 # elif defined(HAVE_ALSA)
 #  define __LINUX_ALSA__
+#  define RTAUDIO_API_TYPE LINUX_ALSA
+#  define RTMIDI_API_TYPE LINUX_ALSA
 # elif defined(HAVE_PULSEAUDIO)
 #  define __LINUX_PULSE__
+#  define RTAUDIO_API_TYPE LINUX_PULSE
 # else
 #  define __RTAUDIO_DUMMY__
 #  define __RTMIDI_DUMMY__
@@ -30,6 +39,8 @@
 #else
 # define DISTRHO_RTAUDIO_HAVE_MIDI 0
 #endif
+
+#define RTMIDI_DO_NOT_ENSURE_UNIQUE_PORTNAMES
 
 #include "rtaudio/RtAudio.h"
 #include "rtmidi/RtMidi.h"
@@ -53,6 +64,9 @@ struct RtAudioBridge : NativeBridge {
     RtAudio::Api currentApi = RtAudio::UNSPECIFIED;
     std::string currentDevice;
     std::string lastError;
+    bool captureEnabled = false;
+    uint streamInChannels = 0;
+    uint streamOutChannels = 0;
 
     using SampleRateChangedCallback = void (*)(void* arg, jack_nframes_t sampleRate);
     SampleRateChangedCallback sampleRateChangedCallback = notifyStandaloneSampleRateChanged;
@@ -65,6 +79,7 @@ struct RtAudioBridge : NativeBridge {
         RtMidiIn* handle = nullptr;
         RtMidiIn** handlePtr = nullptr;
     } midiInPorts[kMaxMIDIInputPorts];
+    std::vector<std::string> midiInPortNames;
 # endif
 # if DISTRHO_PLUGIN_WANT_MIDI_OUTPUT
     RtMidiOut* midiOut = nullptr;
@@ -73,6 +88,9 @@ struct RtAudioBridge : NativeBridge {
 
     RtAudioBridge()
     {
+#if DISTRHO_RTAUDIO_HAVE_MIDI && (DISTRHO_PLUGIN_WANT_MIDI_INPUT || DISTRHO_PLUGIN_WANT_MIDI_OUTPUT)
+        midiAvailable = true;
+#endif
 #if DISTRHO_RTAUDIO_HAVE_MIDI && DISTRHO_PLUGIN_WANT_MIDI_INPUT
         for (uint i = 0; i < kMaxMIDIInputPorts; ++i)
             midiInPorts[i].handlePtr = &midiInPorts[i].handle;
@@ -151,12 +169,26 @@ struct RtAudioBridge : NativeBridge {
     std::vector<std::string> getDeviceNamesForApi(const RtAudio::Api api)
     {
         std::vector<std::string> names;
+#if defined(DISTRHO_OS_WINDOWS)
+        if (api == RtAudio::WINDOWS_ASIO)
+        {
+            AsioDrivers asio;
+            const long count = asio.asioGetNumDev();
+            for (long i = 0; i < count; ++i)
+            {
+                char drvName[64] = {};
+                if (asio.asioGetDriverName(static_cast<int>(i), drvName, sizeof(drvName)) == ASE_OK && drvName[0] != '\0')
+                {
+                    if (std::find(names.begin(), names.end(), drvName) == names.end())
+                        names.push_back(drvName);
+                }
+            }
+            return names;
+        }
+#endif
         if (api != RtAudio::WINDOWS_ASIO)
             names.push_back("Default");
 
-        // Important: RtApiAsio's constructor calls drivers.removeCurrentDriver() on
-        // a file-static AsioDrivers singleton in RtAudio.cpp. Never construct a second
-        // RtAudio(WINDOWS_ASIO) while an ASIO handle is already open.
         if (handle != nullptr && handle->getCurrentApi() == api)
         {
             const uint count = handle->getDeviceCount();
@@ -255,6 +287,13 @@ struct RtAudioBridge : NativeBridge {
 #endif
             return false;
         };
+        backend.getMidiInputs = [this]() {
+#if DISTRHO_RTAUDIO_HAVE_MIDI && DISTRHO_PLUGIN_WANT_MIDI_INPUT
+            return midiInPortNames;
+#else
+            return std::vector<std::string>{};
+#endif
+        };
         pe::setStandaloneAudioBackend(std::move(backend));
     }
 
@@ -264,13 +303,7 @@ struct RtAudioBridge : NativeBridge {
 
         uint32_t initialBuffer = saved.bufferSize;
         if (initialBuffer == 0)
-        {
-#ifdef __WINDOWS_WASAPI__
-            initialBuffer = 0;
-#else
             initialBuffer = 512;
-#endif
-        }
 
         const auto apis = compiledApis();
         RtAudio::Api preferredApi = apis.empty() ? RtAudio::UNSPECIFIED : apis.front();
@@ -325,43 +358,43 @@ struct RtAudioBridge : NativeBridge {
 #if DISTRHO_RTAUDIO_HAVE_MIDI && DISTRHO_PLUGIN_WANT_MIDI_INPUT
     uint openMIDIInPorts(const char* const clientName)
     {
-        RtMidiIn* midiIn;
+        midiInPortNames.clear();
+        RtMidiIn* probe = nullptr;
         try {
-            midiIn = new RtMidiIn(RtMidi::UNSPECIFIED, clientName);
+            probe = new RtMidiIn(RtMidi::UNSPECIFIED, clientName);
         } catch (const RtMidiError& err) {
             d_stderr2("Failed to initialize MIDI in, reason: %s", err.what());
             return 0;
         }
 
-        const uint portCount = std::min(kMaxMIDIInputPorts, midiIn->getPortCount());
+        const uint portCount = std::min(kMaxMIDIInputPorts, probe->getPortCount());
+        delete probe;
 
         if (portCount == 0)
-        {
-            delete midiIn;
             return 0;
-        }
 
-        std::string portName = midiIn->getPortName(0);
-        d_stdout("Connecting to MIDI in port '%s'", portName.c_str());
-
-        midiIn->openPort(0, "events-in");
-        midiIn->ignoreTypes(true, true, true);
-        midiIn->setCallback(RtMidiCallback, this);
-        midiInPorts[0].handle = midiIn;
-
-        for (uint i = 1; i < portCount; ++i)
+        uint opened = 0;
+        for (uint i = 0; i < portCount; ++i)
         {
-            midiIn = new RtMidiIn(RtMidi::UNSPECIFIED, clientName);
-            portName = midiIn->getPortName(i);
-            d_stdout("Connecting to MIDI in port '%s'", portName.c_str());
+            RtMidiIn* midiIn = nullptr;
+            try {
+                midiIn = new RtMidiIn(RtMidi::UNSPECIFIED, clientName);
+                const std::string portName = midiIn->getPortName(i);
+                d_stdout("Connecting to MIDI in port '%s'", portName.c_str());
 
-            midiIn->openPort(i, "events-in");
-            midiIn->ignoreTypes(true, true, true);
-            midiIn->setCallback(RtMidiCallback, this);
-            midiInPorts[i].handle = midiIn;
+                midiIn->ignoreTypes(true, true, true);
+                midiIn->setCallback(RtMidiCallback, this);
+                midiIn->openPort(i, "events-in");
+                midiInPorts[opened].handle = midiIn;
+                midiInPortNames.push_back(portName);
+                ++opened;
+            } catch (const RtMidiError& err) {
+                d_stderr2("Failed to open MIDI in port %u, reason: %s", i, err.what());
+                delete midiIn;
+            }
         }
 
-        return (numMIDIInPorts = portCount);
+        return (numMIDIInPorts = opened);
     }
 #endif
 
@@ -382,6 +415,12 @@ struct RtAudioBridge : NativeBridge {
             } catch (...) {}
         }
 
+#if DISTRHO_PLUGIN_NUM_INPUTS + DISTRHO_PLUGIN_NUM_OUTPUTS > 0
+        delete[] audioBufferStorage;
+        audioBufferStorage = nullptr;
+        std::memset(audioBuffers, 0, sizeof(audioBuffers));
+#endif
+
         delete handle;
         handle = nullptr;
     }
@@ -400,6 +439,7 @@ struct RtAudioBridge : NativeBridge {
             midiInPorts[i].handle = nullptr;
         }
         numMIDIInPorts = 0;
+        midiInPortNames.clear();
 #endif
 #if DISTRHO_RTAUDIO_HAVE_MIDI && DISTRHO_PLUGIN_WANT_MIDI_OUTPUT
         if (midiOut != nullptr)
@@ -409,6 +449,7 @@ struct RtAudioBridge : NativeBridge {
             midiOut = nullptr;
         }
 #endif
+        freeBuffers();
 
         return true;
     }
@@ -448,22 +489,12 @@ struct RtAudioBridge : NativeBridge {
 
     bool isAudioInputEnabled() const override
     {
-        return numAudioIns != 0;
+        return captureEnabled;
     }
 
     bool supportsBufferSizeChanges() const override
     {
-        if (handle == nullptr)
-            return false;
-
-        switch (handle->getCurrentApi())
-        {
-        // WASAPI queues buffer fragments inside RtAudio rather than resizing the hardware period.
-        case RtAudio::WINDOWS_WASAPI:
-            return false;
-        default:
-            return true;
-        }
+        return handle != nullptr;
     }
 
     bool isMIDIEnabled() const override
@@ -486,7 +517,7 @@ struct RtAudioBridge : NativeBridge {
 
     bool requestBufferSizeChange(const uint32_t newBufferSize) override
     {
-        const bool ok = reinit(numAudioIns != 0, newBufferSize);
+        const bool ok = reinit(captureEnabled, newBufferSize);
         if (ok && handle != nullptr)
             pe::saveStandaloneBufferSize(bufferSize);
         return ok;
@@ -535,7 +566,7 @@ struct RtAudioBridge : NativeBridge {
         const std::string prevDevice = currentDevice;
         const uint32_t prevBufferSize = bufferSize;
         const uint32_t prevSampleRate = sampleRate;
-        const bool audioIn = numAudioIns != 0;
+        const bool audioIn = captureEnabled;
 
         char clientName[32];
         std::snprintf(clientName, sizeof(clientName), "%s", DISTRHO_PLUGIN_NAME);
@@ -544,13 +575,22 @@ struct RtAudioBridge : NativeBridge {
         if (handle != nullptr)
             closeAudioStreamOnly();
 
-        uint32_t requestedBuffer = prevBufferSize;
-        if (targetApi == RtAudio::WINDOWS_WASAPI)
-            requestedBuffer = 0;
-        else if (requestedBuffer == 0)
-            requestedBuffer = 512;
+        const uint32_t requestedBuffer = prevBufferSize != 0 ? prevBufferSize : 512;
 
-        if (!_open(clientName, requestedBuffer, targetApi, targetDevice, audioIn) || !activate())
+        bool opened = _open(clientName, requestedBuffer, targetApi, targetDevice, audioIn);
+        if (opened)
+        {
+            if (sampleRate != prevSampleRate && sampleRateChangedCallback != nullptr)
+                sampleRateChangedCallback(jackProcessArg, sampleRate);
+
+            if (bufferSize != prevBufferSize && bufferSizeCallback != nullptr)
+                bufferSizeCallback(bufferSize, jackBufferSizeArg);
+
+            if (!activate())
+                opened = false;
+        }
+
+        if (!opened)
         {
             const std::string failedError = lastError;
             if (handle != nullptr)
@@ -559,19 +599,19 @@ struct RtAudioBridge : NativeBridge {
             // Restore previous working engine and device
             if (prevApi != RtAudio::UNSPECIFIED)
             {
-                const uint32_t restoreBuf = (prevApi == RtAudio::WINDOWS_WASAPI) ? 0 : prevBufferSize;
+                const uint32_t restoreBuf = prevBufferSize != 0 ? prevBufferSize : 512;
                 if (_open(clientName, restoreBuf, prevApi, prevDevice, audioIn))
+                {
+                    if (sampleRateChangedCallback != nullptr)
+                        sampleRateChangedCallback(jackProcessArg, sampleRate);
+                    if (bufferSizeCallback != nullptr)
+                        bufferSizeCallback(bufferSize, jackBufferSizeArg);
                     activate();
+                }
             }
             lastError = failedError;
             return false;
         }
-
-        if (sampleRate != prevSampleRate && sampleRateChangedCallback != nullptr)
-            sampleRateChangedCallback(jackProcessArg, sampleRate);
-
-        if (bufferSize != prevBufferSize && bufferSizeCallback != nullptr)
-            bufferSizeCallback(bufferSize, jackBufferSizeArg);
 
         pe::StandaloneAudioConfig cfg = pe::loadStandaloneAudioConfig();
         cfg.engine = getCurrentEngineName();
@@ -592,14 +632,20 @@ struct RtAudioBridge : NativeBridge {
         const uint32_t oldBufferSize = bufferSize;
         const uint32_t oldSampleRate = sampleRate;
 
+        const bool oldAudioIn = captureEnabled;
+
         closeAudioStreamOnly();
 
         char clientName[32];
         std::snprintf(clientName, sizeof(clientName), "%s", DISTRHO_PLUGIN_NAME);
         clientName[sizeof(clientName) - 1] = '\0';
 
-        if (!_open(clientName, newBufferSize, activeApi, activeDevice, audioIn))
-            return false;
+        bool ok = _open(clientName, newBufferSize, activeApi, activeDevice, audioIn);
+        if (!ok)
+        {
+            if (!_open(clientName, oldBufferSize, activeApi, activeDevice, oldAudioIn))
+                return false;
+        }
 
         if (sampleRate != oldSampleRate && sampleRateChangedCallback != nullptr)
             sampleRateChangedCallback(jackProcessArg, sampleRate);
@@ -607,14 +653,17 @@ struct RtAudioBridge : NativeBridge {
         if (bufferSize != oldBufferSize && bufferSizeCallback != nullptr)
             bufferSizeCallback(bufferSize, jackBufferSizeArg);
 
-        return activate();
+        if (!activate())
+            return false;
+
+        return ok;
     }
 
     bool _open(const char* const clientName,
                uint32_t nextBufferSize,
                const RtAudio::Api api,
                const std::string& wantedDevice,
-               const bool audioIn = DISTRHO_PLUGIN_NUM_INPUTS != 0)
+               const bool audioIn = false)
     {
         RtAudio* rtaudio = nullptr;
         try {
@@ -634,24 +683,47 @@ struct RtAudioBridge : NativeBridge {
             return false;
         }
 
-        int selectedOutDev = -1;
-        std::string resolvedDeviceName;
+        std::vector<uint> candidates;
+        std::vector<std::string> candidateNames;
 
         if (!wantedDevice.empty())
         {
-            for (uint i = 0; i < devCount; ++i)
+#if defined(DISTRHO_OS_WINDOWS)
+            if (rtaudio->getCurrentApi() == RtAudio::WINDOWS_ASIO)
             {
-                try {
-                    const RtAudio::DeviceInfo info = rtaudio->getDeviceInfo(i);
-                    if (info.name == wantedDevice)
+                AsioDrivers asio;
+                const long n = asio.asioGetNumDev();
+                for (long i = 0; i < n && static_cast<uint>(i) < devCount; ++i)
+                {
+                    char drvName[64] = {};
+                    if (asio.asioGetDriverName(static_cast<int>(i), drvName, sizeof(drvName)) == ASE_OK)
                     {
-                        selectedOutDev = static_cast<int>(i);
-                        resolvedDeviceName = info.name;
-                        break;
+                        if (wantedDevice == drvName || std::strncmp(wantedDevice.c_str(), drvName, 31) == 0)
+                        {
+                            candidates.push_back(static_cast<uint>(i));
+                            candidateNames.push_back(drvName);
+                            break;
+                        }
                     }
-                } catch (...) {}
+                }
             }
-            if (selectedOutDev < 0)
+#endif
+            if (candidates.empty())
+            {
+                for (uint i = 0; i < devCount; ++i)
+                {
+                    try {
+                        const RtAudio::DeviceInfo info = rtaudio->getDeviceInfo(i);
+                        if (info.name == wantedDevice || std::strncmp(wantedDevice.c_str(), info.name.c_str(), 31) == 0)
+                        {
+                            candidates.push_back(i);
+                            candidateNames.push_back(wantedDevice);
+                            break;
+                        }
+                    } catch (...) {}
+                }
+            }
+            if (candidates.empty())
             {
                 lastError = "Audio device not found: " + wantedDevice;
                 delete rtaudio;
@@ -660,84 +732,142 @@ struct RtAudioBridge : NativeBridge {
         }
         else
         {
-            selectedOutDev = static_cast<int>(rtaudio->getDefaultOutputDevice());
-            if (selectedOutDev >= 0 && static_cast<uint>(selectedOutDev) < devCount)
+            const uint defOut = rtaudio->getDefaultOutputDevice();
+            if (defOut < devCount)
+                candidates.push_back(defOut);
+            for (uint i = 0; i < devCount; ++i)
+            {
+                if (std::find(candidates.begin(), candidates.end(), i) == candidates.end())
+                    candidates.push_back(i);
+            }
+#if defined(DISTRHO_OS_WINDOWS)
+            AsioDrivers asio;
+            for (const uint idx : candidates)
+            {
+                if (rtaudio->getCurrentApi() == RtAudio::WINDOWS_ASIO)
+                {
+                    char drvName[64] = {};
+                    if (asio.asioGetDriverName(static_cast<int>(idx), drvName, sizeof(drvName)) == ASE_OK)
+                        candidateNames.push_back(drvName);
+                    else
+                        candidateNames.push_back(std::string());
+                }
+                else
+                {
+                    candidateNames.push_back(std::string());
+                }
+            }
+#else
+            candidateNames.resize(candidates.size());
+#endif
+        }
+
+        if (nextBufferSize == 0)
+            nextBufferSize = 512;
+
+        bool streamOpened = false;
+        std::string resolvedDeviceName;
+        uint openedInChannels = 0;
+        uint openedOutChannels = 0;
+        uint32_t chosenBuffer = nextBufferSize;
+
+        for (size_t cIdx = 0; cIdx < candidates.size(); ++cIdx)
+        {
+            if (rtaudio == nullptr)
             {
                 try {
-                    const RtAudio::DeviceInfo info = rtaudio->getDeviceInfo(static_cast<uint>(selectedOutDev));
-                    if (rtaudio->getCurrentApi() == RtAudio::WINDOWS_ASIO)
-                        resolvedDeviceName = info.name;
-                } catch (...) {}
+                    rtaudio = new RtAudio(api);
+                } catch (const RtAudioError& err) {
+                    lastError = err.what();
+                    return false;
+                }
             }
-        }
 
-        RtAudio::StreamParameters inParams;
-        RtAudio::StreamParameters* inParamsPtr = nullptr;
+            const uint outDevId = candidates[cIdx];
 
-        if (audioIn)
-        {
-            inParams.deviceId = rtaudio->getDefaultInputDevice();
-            inParams.nChannels = DISTRHO_PLUGIN_NUM_INPUTS;
-            if (inParams.nChannels != 0)
-                inParamsPtr = &inParams;
-        }
+            RtAudio::StreamParameters inParams;
+            RtAudio::StreamParameters* inParamsPtr = nullptr;
 
-        RtAudio::StreamParameters outParams;
-        RtAudio::StreamParameters* outParamsPtr = nullptr;
-        outParams.deviceId = static_cast<uint>(selectedOutDev >= 0 ? selectedOutDev : 0);
-        outParams.nChannels = DISTRHO_PLUGIN_NUM_OUTPUTS;
-        if (outParams.nChannels != 0)
-            outParamsPtr = &outParams;
-
-        if (inParamsPtr == nullptr && outParamsPtr == nullptr)
-        {
-            outParams.nChannels = 2;
-            outParamsPtr = &outParams;
-        }
-
-        uint targetSampleRate = 48000;
-        try {
-            const RtAudio::DeviceInfo devInfo = rtaudio->getDeviceInfo(outParams.deviceId);
-            if (!devInfo.sampleRates.empty())
+            if (audioIn)
             {
-                const auto& rates = devInfo.sampleRates;
-                if (std::find(rates.begin(), rates.end(), 48000u) != rates.end())
-                    targetSampleRate = 48000;
-                else if (devInfo.preferredSampleRate != 0
-                         && std::find(rates.begin(), rates.end(), devInfo.preferredSampleRate) != rates.end())
-                    targetSampleRate = devInfo.preferredSampleRate;
-                else if (std::find(rates.begin(), rates.end(), 44100u) != rates.end())
-                    targetSampleRate = 44100;
-                else
-                    targetSampleRate = rates.front();
+                inParams.deviceId = (rtaudio->getCurrentApi() == RtAudio::WINDOWS_ASIO)
+                    ? outDevId
+                    : rtaudio->getDefaultInputDevice();
+                inParams.nChannels = DISTRHO_PLUGIN_NUM_INPUTS;
+                if (inParams.nChannels != 0)
+                    inParamsPtr = &inParams;
             }
-            if (outParams.nChannels > devInfo.outputChannels && devInfo.outputChannels > 0)
-                outParams.nChannels = devInfo.outputChannels;
-        } catch (...) {}
 
-        RtAudio::StreamOptions opts;
-        opts.flags = RTAUDIO_NONINTERLEAVED | RTAUDIO_MINIMIZE_LATENCY | RTAUDIO_ALSA_USE_DEFAULT;
-        opts.streamName = clientName;
+            RtAudio::StreamParameters outParams;
+            RtAudio::StreamParameters* outParamsPtr = nullptr;
+            outParams.deviceId = outDevId;
+            outParams.nChannels = DISTRHO_PLUGIN_NUM_OUTPUTS;
+            if (outParams.nChannels != 0)
+                outParamsPtr = &outParams;
 
-        try {
-            rtaudio->openStream(outParamsPtr, inParamsPtr, RTAUDIO_FLOAT32, targetSampleRate, &nextBufferSize, RtAudioCallback, this, &opts);
-        } catch (const RtAudioError& err) {
-            lastError = err.what();
-            d_stderr2("Failed to open Audio stream, reason: %s", err.what());
-            delete rtaudio;
-            return false;
+            if (inParamsPtr == nullptr && outParamsPtr == nullptr)
+            {
+                outParams.nChannels = 2;
+                outParamsPtr = &outParams;
+            }
+
+            uint targetSampleRate = 48000;
+            try {
+                const RtAudio::DeviceInfo devInfo = rtaudio->getDeviceInfo(outParams.deviceId);
+                if (!devInfo.sampleRates.empty())
+                {
+                    const auto& rates = devInfo.sampleRates;
+                    if (std::find(rates.begin(), rates.end(), 48000u) != rates.end())
+                        targetSampleRate = 48000;
+                    else if (devInfo.preferredSampleRate != 0
+                             && std::find(rates.begin(), rates.end(), devInfo.preferredSampleRate) != rates.end())
+                        targetSampleRate = devInfo.preferredSampleRate;
+                    else if (std::find(rates.begin(), rates.end(), 44100u) != rates.end())
+                        targetSampleRate = 44100;
+                    else
+                        targetSampleRate = rates.front();
+                }
+                if (outParams.nChannels > devInfo.outputChannels && devInfo.outputChannels > 0)
+                    outParams.nChannels = devInfo.outputChannels;
+            } catch (...) {}
+
+            RtAudio::StreamOptions opts;
+            opts.flags = RTAUDIO_NONINTERLEAVED | RTAUDIO_MINIMIZE_LATENCY | RTAUDIO_ALSA_USE_DEFAULT;
+            opts.streamName = clientName;
+
+            chosenBuffer = nextBufferSize;
+            try {
+                rtaudio->openStream(outParamsPtr, inParamsPtr, RTAUDIO_FLOAT32, targetSampleRate, &chosenBuffer, RtAudioCallback, this, &opts);
+                streamOpened = true;
+                resolvedDeviceName = candidateNames[cIdx];
+                openedInChannels = inParamsPtr != nullptr ? inParams.nChannels : 0;
+                openedOutChannels = outParamsPtr != nullptr ? outParams.nChannels : 0;
+                break;
+            } catch (const RtAudioError& err) {
+                lastError = err.what();
+                d_stderr2("Failed to open Audio stream on device %u, reason: %s", outDevId, err.what());
+                delete rtaudio;
+                rtaudio = nullptr;
+            }
         }
+
+        if (!streamOpened || rtaudio == nullptr)
+            return false;
+
+        if (chosenBuffer == 0)
+            chosenBuffer = nextBufferSize;
 
         handle = rtaudio;
         currentApi = rtaudio->getCurrentApi();
         currentDevice = resolvedDeviceName;
-        numAudioIns = inParamsPtr != nullptr ? inParams.nChannels : 0;
-        numAudioOuts = outParamsPtr != nullptr ? outParams.nChannels : 0;
-        bufferSize = nextBufferSize;
+        captureEnabled = (openedInChannels != 0);
+        streamInChannels = openedInChannels;
+        streamOutChannels = openedOutChannels;
+        bufferSize = chosenBuffer;
         sampleRate = rtaudio->getStreamSampleRate();
         lastError.clear();
 
-        allocBuffers(inParamsPtr != nullptr, outParamsPtr != nullptr);
+        allocBuffers(true, !midiUsed);
         return true;
     }
 
@@ -755,25 +885,27 @@ struct RtAudioBridge : NativeBridge {
 
         if (self->jackProcessCallback != nullptr)
         {
-            ulong i = 0;
-
+#if DISTRHO_PLUGIN_NUM_INPUTS > 0
             if (float* const ins = static_cast<float*>(inputBuffer))
             {
-                for (; i < self->numAudioIns; ++i)
+                for (uint i = 0; i < self->streamInChannels && i < DISTRHO_PLUGIN_NUM_INPUTS; ++i)
                     self->audioBuffers[i] = ins + (i * numFrames);
             }
+#endif
 
+#if DISTRHO_PLUGIN_NUM_OUTPUTS > 0
             if (float* const outs = static_cast<float*>(outputBuffer))
             {
-                for (ulong j = 0; i < self->numAudioIns + self->numAudioOuts; ++i, ++j)
-                    self->audioBuffers[i] = outs + (j * numFrames);
+                for (uint i = 0; i < self->streamOutChannels && i < DISTRHO_PLUGIN_NUM_OUTPUTS; ++i)
+                    self->audioBuffers[DISTRHO_PLUGIN_NUM_INPUTS + i] = outs + (i * numFrames);
             }
+#endif
 
             self->jackProcessCallback(numFrames, self->jackProcessArg);
         }
         else if (outputBuffer != nullptr)
         {
-            std::memset(outputBuffer, 0, sizeof(float) * numFrames * self->numAudioOuts);
+            std::memset(outputBuffer, 0, sizeof(float) * numFrames * self->streamOutChannels);
         }
 
         return 0;
@@ -784,20 +916,18 @@ struct RtAudioBridge : NativeBridge {
 #if DISTRHO_RTAUDIO_HAVE_MIDI && DISTRHO_PLUGIN_WANT_MIDI_INPUT
     static void RtMidiCallback(double timeStamp, std::vector<uchar>* message, void* userData)
     {
-        const size_t numBytes = message->size();
-        DISTRHO_SAFE_ASSERT_RETURN(numBytes > 0,);
-
-        if (numBytes > kMaxMIDIInputMessageSize)
-            return;
+        const size_t len = message->size();
+        DISTRHO_SAFE_ASSERT_RETURN(len > 0 && len <= kMaxMIDIInputMessageSize,);
 
         RtAudioBridge* const self = static_cast<RtAudioBridge*>(userData);
 
-        const uint8_t* const bytes = message->data();
+        const RecursiveMutexLocker rml(self->midiInLock);
 
-        self->midiInBufferPending.writeByte(static_cast<uint8_t>(numBytes));
-        for (size_t i = 0; i < numBytes; ++i)
-            self->midiInBufferPending.writeByte(bytes[i]);
-        self->midiInBufferPending.commitWrite();
+        self->midiInBufferPending.writeByte(static_cast<uint8_t>(len));
+        self->midiInBufferPending.writeCustomData(message->data(), len);
+        for (uint8_t i = static_cast<uint8_t>(len); i < kMaxMIDIInputMessageSize; ++i)
+            self->midiInBufferPending.writeByte(0);
+        self->midiInBufferPending.commitWrite("RtMidiCallback");
 
         (void)timeStamp;
     }

@@ -49,9 +49,7 @@ public:
         refresh();
     }
 
-    ~AsioDrivers() {
-        removeCurrentDriver();
-    }
+    ~AsioDrivers() = default;
 
     void refresh() {
         entries_.clear();
@@ -100,18 +98,18 @@ public:
         return static_cast<long>(entries_.size());
     }
 
-    ASIOBool asioGetDriverName(int index, char* name, int nameSize) {
+    ASIOError asioGetDriverName(int index, char* name, int nameSize) {
         if (!name || nameSize <= 0)
-            return ASIOFalse;
+            return ASE_InvalidParameter;
         if (index < 0 || static_cast<size_t>(index) >= entries_.size())
             refresh();
         if (index < 0 || static_cast<size_t>(index) >= entries_.size()) {
             name[0] = '\0';
-            return ASIOFalse;
+            return ASE_NotPresent;
         }
         std::strncpy(name, entries_[static_cast<size_t>(index)].name.c_str(), static_cast<size_t>(nameSize - 1));
         name[nameSize - 1] = '\0';
-        return ASIOTrue;
+        return ASE_OK;
     }
 
     bool loadDriver(char* name) {
@@ -166,15 +164,18 @@ inline ASIOError ASIOInit(ASIODriverInfo* info) {
     if (!info)
         return ASE_InvalidParameter;
 
-    info->driverVersion = drv->getDriverVersion();
-    drv->getDriverName(info->name);
+    info->driverVersion = 0;
+    info->name[0] = '\0';
     info->errorMessage[0] = '\0';
-    if (!drv->init(info->sysRef)) {
+    void* sysRef = info->sysRef ? info->sysRef : GetDesktopWindow();
+    if (!drv->init(sysRef)) {
         drv->getErrorMessage(info->errorMessage);
         drv->Release();
         AsioDrivers::currentDriver() = nullptr;
         return ASE_NotPresent;
     }
+    info->driverVersion = drv->getDriverVersion();
+    drv->getDriverName(info->name);
     return ASE_OK;
 }
 

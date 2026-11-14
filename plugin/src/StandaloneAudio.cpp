@@ -213,4 +213,15 @@ bool openStandaloneAudioControlPanel() {
     return false;
 }
 
+std::vector<std::string> standaloneMidiInputs() {
+    std::function<std::vector<std::string>()> fn;
+    {
+        std::lock_guard<std::mutex> lock(backendMutex());
+        fn = backendInstance().getMidiInputs;
+    }
+    if (fn)
+        return fn();
+    return {};
+}
+
 }  // namespace pe

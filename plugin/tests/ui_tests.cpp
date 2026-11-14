@@ -7585,10 +7585,14 @@ TEST(standalone_audio_config_and_backend_dispatch)
         controlPanelOpened = true;
         return true;
     };
+    backend.getMidiInputs = []() -> std::vector<std::string> {
+        return { "Yamaha CVP-208-1", "Focusrite USB MIDI" };
+    };
 
     setStandaloneAudioBackend(backend);
     CHECK(hasStandaloneAudioBackend());
     CHECK(standaloneAudioEngines() == std::vector<std::string>({ "WASAPI", "ASIO", "DirectSound" }));
+    CHECK(standaloneMidiInputs() == std::vector<std::string>({ "Yamaha CVP-208-1", "Focusrite USB MIDI" }));
     CHECK(currentStandaloneAudioEngine() == "WASAPI");
     CHECK(!hasStandaloneAudioControlPanel());
 

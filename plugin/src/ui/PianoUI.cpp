@@ -2624,7 +2624,19 @@ private:
                 drawToggle(*this, fLayout.bufferChips[i], c);
             }
             const MidiRow r { -1, kParamCount, fLayout.rescanMidi, fLayout.rescanButton };
-            drawMidiRow(*this, r, "MIDI inputs", isMIDIEnabled() ? "open (Rescan for ones plugged in since)" : "none open", "Rescan",
+            std::string midiStatus = isMIDIEnabled() ? "open (Rescan for ones plugged in since)" : "none open";
+            if (isMIDIEnabled()) {
+                const std::vector<std::string> ports = standaloneMidiInputs();
+                if (!ports.empty()) {
+                    midiStatus.clear();
+                    for (size_t i = 0; i < ports.size(); ++i) {
+                        if (i > 0)
+                            midiStatus += ", ";
+                        midiStatus += ports[i];
+                    }
+                }
+            }
+            drawMidiRow(*this, r, "MIDI inputs", midiStatus.c_str(), "Rescan",
                 false, false);
         }
     }
