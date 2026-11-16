@@ -22,7 +22,7 @@ jobs:
   macos:
     runs-on: macos-15
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           submodules: recursive
       - uses: dtolnay/rust-toolchain@stable
@@ -71,7 +71,7 @@ jobs:
     env:
       CMAKE_GENERATOR: Ninja
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           submodules: recursive
       - uses: msys2/setup-msys2@v2

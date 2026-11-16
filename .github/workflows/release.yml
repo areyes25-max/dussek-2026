@@ -25,7 +25,7 @@ jobs:
     outputs:
       version: ${{ steps.v.outputs.version }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - id: v
         name: The version is the code's, and CHANGELOG.md has its section
         env:
@@ -43,7 +43,7 @@ jobs:
     timeout-minutes: 60
     runs-on: ubuntu-22.04   # the oldest LTS: glibc 2.35, so older systems run the build
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           submodules: recursive
       - name: System packages (DPF's)
@@ -90,7 +90,7 @@ jobs:
     timeout-minutes: 60
     runs-on: macos-15
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           submodules: recursive
       - uses: dtolnay/rust-toolchain@stable
@@ -139,7 +139,7 @@ jobs:
     env:
       CMAKE_GENERATOR: Ninja
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           submodules: recursive
       - uses: msys2/setup-msys2@v2
@@ -206,7 +206,7 @@ jobs:
       contents: write   # the release; everything else stays read-only
       actions: write    # starting the website's run
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: actions/download-artifact@v8   # v8: the files uploaded unzipped (archive: false) as they are
         with:
           path: assets
