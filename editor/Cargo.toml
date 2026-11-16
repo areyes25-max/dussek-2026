@@ -17,8 +17,8 @@ path = "src/main.rs"
 
 [dependencies]
 dussek = { path = "../engine" }
-eframe = "0.36.2"
-egui_extras = "0.36.2"
+eframe = "0.37.0"
+egui_extras = "0.37.0"
 toml_edit = "0.25.19"
 regex = "1.13.1"
 glob = "0.3.4"
