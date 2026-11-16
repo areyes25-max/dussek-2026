@@ -288,7 +288,7 @@
   "version": 1
  },
  "project:horn:export_brass": {
-  "commit": "88aea29 adopted",
+  "commit": "13766e3",
   "inputs": {
    "fit.cells": "a6d01176232460b3",
    "fit.cells_mutes": "e10808d43975dc40",
@@ -312,7 +312,7 @@
    "uses.mutes:fit.mute_residual": "6e9c960fd025b2e5",
    "uses.mutes:fit.mute_shapes": "6e9c960fd025b2e5"
   },
-  "seq": 120,
+  "seq": 121,
   "version": 4
  }
 }

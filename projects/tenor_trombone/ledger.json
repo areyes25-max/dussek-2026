@@ -288,7 +288,7 @@
   "version": 1
  },
  "project:tenor_trombone:export_brass": {
-  "commit": "88aea29 adopted",
+  "commit": "13766e3",
   "inputs": {
    "fit.cells": "30b15684f28ba680",
    "fit.cells_mutes": "058b6cd898c80a8a",
@@ -312,7 +312,7 @@
    "uses.mutes:fit.mute_residual": "92f157af167b33c4",
    "uses.mutes:fit.mute_shapes": "5cfed9a44e4c7a79"
   },
-  "seq": 152,
+  "seq": 153,
   "version": 4
  }
 }
