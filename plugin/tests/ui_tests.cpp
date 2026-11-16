@@ -6686,6 +6686,78 @@ TEST(data_dirs_per_platform)
     }
 }
 
+TEST(bundle_and_sandbox_data_dirs)
+{
+    // a sandboxed host (a Flatpak: issue 1) moves XDG_DATA_HOME: the plugin's place and the real home still lead
+    // to the instruments install.sh put there
+    using pe::Platform;
+    using V = std::vector<std::string>;
+    CHECK(pe::bundleDataDirs("/hm/u/.lv2/dussek.lv2", Platform::Linux) == V { "/hm/u/.local/share/dussek" });
+    CHECK(pe::bundleDataDirs("/hm/u/.vst3/dussek.vst3/Contents/Resources", Platform::Linux) == V { "/hm/u/.local/share/dussek" });
+    CHECK(pe::bundleDataDirs("/usr/local/lib/lv2/dussek.lv2/", Platform::Linux) == V { "/usr/local/share/dussek" });
+    CHECK(pe::bundleDataDirs("/usr/lib/clap/dussek.clap", Platform::Linux) == (V { "/usr/share/dussek", "/usr/local/share/dussek" }));
+    CHECK(pe::bundleDataDirs("/usr/lib/x86_64-linux-gnu/lv2/dussek.lv2", Platform::Linux) == (V { "/usr/share/dussek", "/usr/local/share/dussek" }));
+    CHECK(pe::bundleDataDirs("/run/host/usr/local/lib64/vst3/dussek.vst3/Contents/Resources", Platform::Linux)
+        == V { "/run/host/usr/local/share/dussek" });
+    CHECK(pe::bundleDataDirs("/opt/plugins/dussek.lv2", Platform::Linux).empty());
+    CHECK(pe::bundleDataDirs("relative/.lv2/dussek.lv2", Platform::Linux).empty());
+    CHECK(pe::bundleDataDirs("/hm/u/.lv2/dussek.lv2", Platform::MacOS).empty());
+    const auto env = [](std::map<std::string, std::string> m) {
+        return [m](const char* k) -> const char* {
+            auto it = m.find(k);
+            return it == m.end() ? nullptr : it->second.c_str();
+        };
+    };
+    CHECK(pe::sandboxDataDirs(env({{"HOME", "/hm/u"}, {"XDG_DATA_HOME", "/hm/u/.var/app/a.b/data"}}), Platform::Linux).empty());
+    const V flat = pe::sandboxDataDirs(env({{"HOME", "/hm/u"}, {"FLATPAK_ID", "a.b"}, {"XDG_DATA_HOME", "/hm/u/.var/app/a.b/data"}}), Platform::Linux);
+    CHECK(!flat.empty() && flat.front() == "/hm/u/.local/share/dussek");
+    CHECK(std::find(flat.begin(), flat.end(), "/run/host/usr/local/share/dussek") != flat.end());
+    CHECK(pe::sandboxDataDirs(env({{"HOME", "/hm/u/snap/a/7"}, {"SNAP_REAL_HOME", "/hm/u"}}), Platform::Linux) == V { "/hm/u/.local/share/dussek" });
+    CHECK(pe::sandboxDataDirs(env({{"HOME", "/hm/u"}, {"FLATPAK_ID", "a.b"}}), Platform::Windows).empty());
+}
+
+TEST(a_flatpak_host_finds_the_users_instruments)
+{
+    // the process as a Flatpak runs it: XDG_DATA_HOME the app's own, the instruments under the real home
+    if (pe::hostPlatform() != pe::Platform::Linux)
+        return;
+    TempTree t;
+    t.add("home/.local/share/dussek/instruments", "harp", "harp", R"({"name": "Harp A", "group": "Harps"})");
+    const char* names[] = { "HOME", "XDG_DATA_HOME", "FLATPAK_ID", "DUSSEK_INSTRUMENTS", "XDG_DATA_DIRS" };
+    std::map<std::string, std::string> was;
+    for (const char* n : names)
+        if (const char* v = std::getenv(n)) was[n] = v;
+    setEnv("HOME", t.path("home").c_str());
+    setEnv("XDG_DATA_HOME", t.path("home/.var/app/a.b/data").c_str());
+    setEnv("XDG_DATA_DIRS", t.path("none").c_str());
+    unsetEnv("DUSSEK_INSTRUMENTS");
+    unsetEnv("FLATPAK_ID");
+    const Catalog outside = Catalog::scan(Catalog::searchPaths(nullptr));
+    const InstrumentEntry* stray = outside.find("harp", PluginKind::Keys);
+    CHECK(stray == nullptr || stray->dir.rfind(t.root, 0) != 0);
+    if (outside.menu(PluginKind::Keys).empty()) { // (a system-wide install on this machine would fill it)
+        // none found: the row says so, its tooltip where it looked
+        CHECK(missingLabel(outside, "", PluginKind::Keys) == kNoInstrumentsTitle);
+        CHECK(missingLabel(outside, "grand_a", PluginKind::Keys) == kNoInstrumentsTitle);
+        const std::string why = noInstrumentsText(outside);
+        CHECK(why.find(t.path("home/.var/app/a.b/data") + "/dussek/instruments") != std::string::npos);
+    }
+    setEnv("FLATPAK_ID", "a.b");
+    const Catalog inside = Catalog::scan(Catalog::searchPaths(nullptr));
+    CHECK(inside.find("harp", PluginKind::Keys) != nullptr);
+    CHECK(Catalog::searchPaths(nullptr).back() == t.path("home/.var/app/a.b/data") + "/dussek/snapshots");
+    // the bundle's place alone finds them too (a host that moves HOME as well); each folder once
+    unsetEnv("FLATPAK_ID");
+    const std::string bundle = t.path("home/.lv2/dussek.lv2");
+    const Catalog beside = Catalog::scan(Catalog::searchPaths(bundle.c_str()));
+    CHECK(beside.find("harp", PluginKind::Keys) != nullptr && beside.messages().empty());
+    setEnv("XDG_DATA_HOME", t.path("home/.local/share").c_str());
+    const std::vector<std::string> p = Catalog::searchPaths(bundle.c_str());
+    CHECK(std::count(p.begin(), p.end(), t.path("home/.local/share/dussek/instruments")) == 1);
+    for (const char* n : names)
+        if (was.count(n)) setEnv(n, was[n].c_str()); else unsetEnv(n);
+}
+
 TEST(parse_float_as_from_chars_without_it)
 {
     // std::from_chars for floating point is missing from older macOS libc++: pe::parseFloat reads the

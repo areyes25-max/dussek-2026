@@ -1145,8 +1145,11 @@ private:
         if ((size_t)fTipShown >= fLayout.rows.size())
             return;
         const Row& r = fLayout.rows[(size_t)fTipShown];
-        const std::string title = tooltipTitle(r.param, entry());
-        const char* body = displayDescription(r.param, entry());
+        // none found: where it looked, instead of what the row does
+        const bool none = r.param == kInstrumentRow && fChoice.entry == nullptr && fCatalog->menu(kKind).empty();
+        const std::string why = none ? noInstrumentsText(*fCatalog) : std::string();
+        const std::string title = none ? std::string(kNoInstrumentsTitle) : tooltipTitle(r.param, entry());
+        const char* body = none ? why.c_str() : displayDescription(r.param, entry());
         const char* gestures = tooltipGestures(r.kind, r.param < kParamCount);
         const float vw = getWidth() / uiScale(), vh = viewHeight();
         const float w = std::min(kTooltipW, vw - 8);

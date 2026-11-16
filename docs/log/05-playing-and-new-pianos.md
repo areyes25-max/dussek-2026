@@ -4518,3 +4518,27 @@ The squashed brass branch's first run on GitHub failed twice.
 
 The macOS build's `ranlib` warning (`libdussek.a`, `libweidinger.a`: "the table of contents is empty") is DPF's: an empty
 `FILES_COMMON` becomes a placeholder source with no symbols. v0.3.2 had it for Dussek; it stays.
+
+<a id="step-253"></a>
+## 253. Instruments in a sandboxed host (issue 1)
+
+A DAW installed as a Flatpak loaded the plugin, but its instrument row read "Missing": a Flatpak sets `XDG_DATA_HOME` to the
+app's own folder (`~/.var/app/<id>/data`), so the plugin looked for the instruments `install.sh` put in
+`~/.local/share/dussek` in the wrong place, though they were readable there. Two sources join the search paths (Linux only;
+`plugin/src/Paths.cpp`), after the system folders and before the user folder:
+
+- the bundle's place: a plugin found under `<prefix>/lib*/{lv2,vst3,clap}` implies `<prefix>/share/dussek` (with `/usr`
+  also `/usr/local/share/dussek`, where `install.sh --system` puts the data while CLAP goes to `/usr/lib/clap`), one under
+  `~/.lv2` (`.vst3`, `.clap`) implies `~/.local/share/dussek`. The path is the one the host gave, so a sandbox's own view of
+  the host's folders (`/run/host/usr/…`) works the same;
+- the sandbox: `FLATPAK_ID` set adds `$HOME/.local/share/dussek` (a Flatpak leaves `HOME` alone) and the host's system
+  folders under `/run/host/usr`; `SNAP_REAL_HOME` set adds its `.local/share/dussek` (a Snap moves `HOME`; whether a
+  given snap may read it depends on its plugs, untested).
+
+The search paths name each folder once (the bundle's implied folder is the user folder in a plain install: no "shadowed"
+lines). Finding none of its instruments, the plugin no longer shows "Missing: " with an empty name: the row reads "No
+instruments found", its tooltip lists the folders looked in and what to do, and stderr gets the same. `ui_tests` checks the
+implied folders per layout, the sandbox folders per environment, and a process with a Flatpak's environment finding a
+per-user install (and not finding it without `FLATPAK_ID`). Checked in a Flatpak DAW: inside its sandbox `dussek list` and
+`weidinger list` find the per-user install, and the plugin plays there. That needs a build against an older glibc than the
+runtime's (the release's, built on Ubuntu 22.04: glibc 2.35); one built on a current distribution does not load.

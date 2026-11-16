@@ -62,9 +62,15 @@ The plugin lists every instrument directory it finds in these paths:
    each entry of `$XDG_DATA_DIRS` + `/dussek`, then `/usr/local/share/dussek` and
    `/usr/share/dussek` where the list leaves them out, on macOS
    `/Library/Application Support/Dussek`, on Windows `%PROGRAMDATA%\Dussek`;
-5. `~/.local/share/dussek/instruments` (`just install` links `instruments/` there;
+5. on Linux, the folders the plugin's own place implies, as the host sees it: a bundle under
+   `<prefix>/lib/{lv2,vst3,clap}` → `<prefix>/share/dussek/instruments`, one under
+   `~/.lv2` (`~/.vst3`, `~/.clap`) → `~/.local/share/dussek/instruments`;
+6. on Linux in a sandboxed host, the real folders: in a Flatpak (`$XDG_DATA_HOME` is the app's
+   own there) `~/.local/share/dussek/instruments`, then the host's system folders under
+   `/run/host/usr`; in a Snap `$SNAP_REAL_HOME/.local/share/dussek/instruments`;
+7. `~/.local/share/dussek/instruments` (`just install` links `instruments/` there;
    `$XDG_DATA_HOME` replaces `~/.local/share`);
-6. `~/.local/share/dussek/snapshots`: instruments from a git ref (`just snapshot <ref>`), in
+8. `~/.local/share/dussek/snapshots`: instruments from a git ref (`just snapshot <ref>`), in
    the menu's "Snapshots" group.
 
 A name found in an earlier path hides the same name in the later ones: an installed instrument
@@ -73,6 +79,11 @@ names of their own. Put them in the user folder, not the system folder: the Wind
 installers empty the system folder's `instruments` on every update.
 `dussek list` (the standalone) prints what it finds: a line per instrument (its name, menu
 group and entry, folder), then the hidden copies; it exits with 1 when it finds none.
+Finding none, the instrument row reads "No instruments found", and its tooltip lists the
+folders it looked in (as does a line on stderr). A sandboxed host sees only the folders its
+sandbox lets it: a Flatpak host needs the home folder (most DAWs' Flatpaks have it), a Snap
+host usually sees no hidden folder of the home (`~/.local`); there `$DUSSEK_INSTRUMENTS`, if
+the host passes it on, or a folder opened from the menu still works.
 
 The user folder (`~/.local/share/dussek` above, with the presets beside the instruments)
 is the platform's own: on Linux `$XDG_DATA_HOME/dussek`, else `~/.local/share/dussek`
@@ -93,7 +104,8 @@ is the platform's own: on Linux `$XDG_DATA_HOME/dussek`, else `~/.local/share/du
   the menu (no `instrument.json`, no `data.bin` beside it, or the engine's reason), as one of the
   other plugin's does; a file that is no Scala scale says so under Temperament.
 - **Saved by name**: a session saves the instrument by its directory's name (one opened from a
-  folder by its path). One it cannot find shows as "Missing: <name>" and plays nothing.
+  folder by its path). One it cannot find shows as "Missing: <name>" and plays nothing ("No
+  instruments found" when it finds none at all).
 - **Reload**: an instrument whose files change while the plugin runs plays anew about a second
   after they last changed. This covers a re-export and the editor's rolled preview. The old
   sound fades out over 30 ms, as at a change of instrument.

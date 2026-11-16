@@ -35,9 +35,10 @@ class Catalog {
 public:
     /// the search paths, in precedence order: $DUSSEK_INSTRUMENTS, <resources>/instruments, the
     /// standalone's own folder's instruments (pe::portableFolder: an unpacked archive), the
-    /// system folders' instruments (pe::systemDataDirs: an installer's), the user data folder's
+    /// system folders' instruments (pe::systemDataDirs: an installer's), those the bundle's place
+    /// implies (pe::bundleDataDirs) and a sandbox's real ones (pe::sandboxDataDirs), the user data folder's
     /// instruments (pe::dataDirs: ~/.local/share/dussek/instruments on Linux), then its snapshots
-    /// folder (proto/snapshot.py); unset ones left out
+    /// folder (proto/snapshot.py); unset ones left out, each folder once (its first place)
     static std::vector<std::string> searchPaths(const char* resources);
     /// every subdirectory with an instrument.json (that the engine's report accepts) and a data.bin
     /// (present); an id seen in an earlier path shadows later ones; rejected files are left out
@@ -71,9 +72,12 @@ public:
     const InstrumentEntry* first(PluginKind k) const;
     /// one line per problem the scan found (shadowed, rejected), as printed
     const std::vector<std::string>& messages() const { return fMessages; }
+    /// the folders scanned, in order (searchPaths' answer, for the window's "looked in")
+    const std::vector<std::string>& paths() const { return fPaths; }
 
 private:
     std::vector<InstrumentEntry> fEntries; // menu order
+    std::vector<std::string> fPaths;
     std::map<std::string, std::string> fAliases; // old id → new (the first path's wins)
     std::vector<std::string> fMessages;
 };
@@ -102,7 +106,13 @@ std::string otherPluginOf(const Catalog& c, const std::string& id, PluginKind k)
 /// the other plugin's name when `path` (absolute or relative) is an instrument folder of its, else empty (the
 /// standalone's `render` refuses it)
 std::string otherPluginsFolder(const std::string& path, PluginKind k);
-/// the instrument row's text for an id the plugin does not have: "Weidinger's: trumpet", else "Missing: <id>"
+/// the instrument row's text when the plugin finds none of its instruments
+inline constexpr const char* kNoInstrumentsTitle = "No instruments found";
+/// the instrument row's text for an id the plugin does not have: kNoInstrumentsTitle when it has none at all,
+/// "Weidinger's: trumpet", else "Missing: <id>"
 std::string missingLabel(const Catalog& c, const std::string& id, PluginKind k);
+/// why the menu is empty, for the row's tooltip and stderr: "Looked in:", the folders scanned (one per line,
+/// snapshots left out), then what to do
+std::string noInstrumentsText(const Catalog& c);
 
 } // namespace pe

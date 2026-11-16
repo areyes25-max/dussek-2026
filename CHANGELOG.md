@@ -3,6 +3,16 @@
 What each release changes for a player. From 1.0 on a break needs a major version; before it, a
 break is allowed but listed under "Breaking" (`docs/compatibility.md`).
 
+## Unreleased
+
+### Fixed
+
+- A plugin in a sandboxed host (a DAW installed as a Flatpak) finds the instruments
+  `install.sh` put in `~/.local/share/dussek`: it also looks where its own place implies and, in a
+  Flatpak or Snap, in the real home's folder.
+- Finding no instruments, the instrument row reads "No instruments found" and its tooltip lists
+  the folders looked in (it read "Missing").
+
 ## 0.4.0 — 2026-11-10
 
 ### New

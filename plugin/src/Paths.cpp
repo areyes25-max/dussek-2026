@@ -215,6 +215,74 @@ std::vector<std::string> systemDataDirs()
     return systemDataDirs([](const char* name) { return static_cast<const char*>(std::getenv(name)); }, hostPlatform());
 }
 
+std::vector<std::string> bundleDataDirs(const std::string& bundle, Platform platform)
+{
+    std::vector<std::string> dirs;
+    if (platform != Platform::Linux || bundle.empty() || bundle[0] != '/')
+        return dirs;
+    const auto add = [&](const std::string& d) {
+        if (std::find(dirs.begin(), dirs.end(), d) == dirs.end())
+            dirs.push_back(d);
+    };
+    // each folder from the bundle up: the format's folder, then what holds it
+    std::string dir = bundle;
+    while (dir.size() > 1 && dir.back() == '/')
+        dir.pop_back();
+    for (int up = 0; up < 8 && dir.size() > 1; ++up) {
+        const size_t cut = dir.find_last_of('/');
+        const std::string name = dir.substr(cut + 1), parent = cut == 0 ? std::string("/") : dir.substr(0, cut);
+        if (name == ".lv2" || name == ".vst3" || name == ".clap") {
+            add((parent == "/" ? std::string() : parent) + "/.local/share/dussek");
+        } else if ((name == "lv2" || name == "vst3" || name == "clap") && parent != "/") {
+            // <prefix>/lib (lib64, lib32) or a Debian multiarch <prefix>/lib/<triplet>
+            const auto split = [](const std::string& d, std::string& base) {
+                const size_t c = d.find_last_of('/');
+                base = d.substr(c + 1);
+                return c == 0 || c == std::string::npos ? std::string() : d.substr(0, c);
+            };
+            std::string lib, above;
+            std::string prefix = split(parent, lib);
+            if (lib.rfind("lib", 0) != 0 && !prefix.empty()) {
+                const std::string up2 = split(prefix, above);
+                prefix = above == "lib" ? up2 : std::string();
+                lib = above;
+            }
+            if (lib.rfind("lib", 0) == 0 && !prefix.empty()) {
+                add(prefix + "/share/dussek");
+                if (prefix.size() >= 4 && prefix.compare(prefix.size() - 4, 4, "/usr") == 0)
+                    add(prefix + "/local/share/dussek");
+            }
+        }
+        dir = parent;
+    }
+    return dirs;
+}
+
+std::vector<std::string> sandboxDataDirs(const std::function<const char*(const char*)>& env, Platform platform)
+{
+    std::vector<std::string> dirs;
+    if (platform != Platform::Linux)
+        return dirs;
+    const auto get = [&](const char* name) {
+        const char* v = env(name);
+        return std::string(v != nullptr ? v : "");
+    };
+    if (!get("FLATPAK_ID").empty()) {
+        if (const std::string home = get("HOME"); !home.empty() && home[0] == '/')
+            dirs.push_back(home + "/.local/share/dussek");
+        dirs.push_back("/run/host/usr/local/share/dussek");
+        dirs.push_back("/run/host/usr/share/dussek");
+    }
+    if (const std::string real = get("SNAP_REAL_HOME"); !real.empty() && real[0] == '/')
+        dirs.push_back(real + "/.local/share/dussek");
+    return dirs;
+}
+
+std::vector<std::string> sandboxDataDirs()
+{
+    return sandboxDataDirs([](const char* name) { return static_cast<const char*>(std::getenv(name)); }, hostPlatform());
+}
+
 std::string folderOf(const std::string& file)
 {
 #ifdef _WIN32

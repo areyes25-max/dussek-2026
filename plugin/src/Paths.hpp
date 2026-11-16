@@ -34,6 +34,23 @@ std::vector<std::string> systemDataDirs(const std::function<const char*(const ch
 /// the process's: its environment, this platform
 std::vector<std::string> systemDataDirs();
 
+/// Linux: the data folders an installation implies from where the host found the plugin (`bundle`:
+/// a path inside it, its resources folder): under <prefix>/lib*/{lv2,vst3,clap} →
+/// <prefix>/share/dussek (a /usr prefix also <prefix>/local/share/dussek: install.sh --system puts
+/// CLAP in /usr/lib/clap); under <home>/.{lv2,vst3,clap} → <home>/.local/share/dussek. A sandboxed
+/// host (a Flatpak's /run/host/…) gives the path it sees. Other platforms, or none found: empty.
+std::vector<std::string> bundleDataDirs(const std::string& bundle, Platform platform);
+
+/// Linux in a sandbox that moves the user's folders: the data folders of the real home and the host's
+/// system. A Flatpak (FLATPAK_ID set; XDG_DATA_HOME is the app's own): $HOME/.local/share/dussek, then
+/// /run/host/usr/local/share/dussek and /run/host/usr/share/dussek (the host's, when the app may see
+/// them); a Snap (SNAP_REAL_HOME set; HOME is the snap's): $SNAP_REAL_HOME/.local/share/dussek. Else
+/// empty.
+std::vector<std::string> sandboxDataDirs(const std::function<const char*(const char*)>& env, Platform platform);
+
+/// the process's: its environment, this platform
+std::vector<std::string> sandboxDataDirs();
+
 /// The standalone's executable, for Copy CLI's command line: `self` the running binary
 /// (DPF's getBinaryFilename) and whether it is the standalone; in a plugin, the standalone next to its
 /// bundle (links resolved: `just install` links the bundles to plugin/build/bin), up to four folders

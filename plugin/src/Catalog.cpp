@@ -84,12 +84,24 @@ std::vector<std::string> Catalog::searchPaths(const char* resources)
     // an installer's, before the user's: an old copy there (a test build's) does not hide them
     for (const std::string& dir : pe::systemDataDirs())
         p.push_back(dir + "/instruments");
+    // where the host found the plugin implies the installation's folder, as the host sees it (a
+    // sandboxed host's own paths), and a sandbox (Flatpak, Snap) moves the user's folder: the real one
+    if (resources != nullptr)
+        for (const std::string& dir : pe::bundleDataDirs(resources, pe::hostPlatform()))
+            p.push_back(dir + "/instruments");
+    for (const std::string& dir : pe::sandboxDataDirs())
+        p.push_back(dir + "/instruments");
     if (const std::string data = pe::dataDirs().data; !data.empty()) {
         p.push_back(data + "/instruments");
         // instruments from git refs (proto/snapshot.py), for development; missing folders are skipped
         p.push_back(data + "/snapshots");
     }
-    return p;
+    // a folder named twice (the bundle's implied one is usually the user's): its first place only
+    std::vector<std::string> once;
+    for (const std::string& d : p)
+        if (std::find(once.begin(), once.end(), d) == once.end())
+            once.push_back(d);
+    return once;
 }
 
 bool Catalog::entryAt(const std::string& path, const std::string& id, InstrumentEntry& out, std::string& message)
@@ -133,6 +145,7 @@ std::string Catalog::whyNot(const std::string& dir)
 Catalog Catalog::scan(const std::vector<std::string>& paths)
 {
     Catalog c;
+    c.fPaths = paths;
     for (const std::string& path : paths) {
         if (path.empty())
             continue;
@@ -167,6 +180,8 @@ Catalog Catalog::scan(const std::vector<std::string>& paths)
     });
     for (const std::string& m : c.fMessages)
         std::fprintf(stderr, "%s\n", m.c_str());
+    if (c.menu(gMessagesPlugin.load()).empty())
+        std::fprintf(stderr, "%s%s. %s\n", messagesPrefix().c_str(), kNoInstrumentsTitle, noInstrumentsText(c).c_str());
     return c;
 }
 
@@ -319,8 +334,23 @@ std::string otherPluginsFolder(const std::string& path, PluginKind k)
 
 std::string missingLabel(const Catalog& c, const std::string& id, PluginKind k)
 {
+    if (c.menu(k).empty() && Catalog::outside(id) == nullptr)
+        return kNoInstrumentsTitle;
     const std::string other = otherPluginOf(c, id, k);
     return (other.empty() ? std::string("Missing") : other + "'s") + ": " + id;
+}
+
+std::string noInstrumentsText(const Catalog& c)
+{
+    std::string out = "Looked in:";
+    static const std::string snapshots = "/snapshots"; // git refs' instruments, for development: not where to install
+    for (const std::string& p : c.paths())
+        if (!p.empty() && !(p.size() > snapshots.size() && p.compare(p.size() - snapshots.size(), snapshots.size(), snapshots) == 0))
+            out += "\n" + p;
+    out += "\n\nInstall them with the release's install script, or open an instrument's folder from this menu.";
+    if (hostPlatform() == Platform::Linux)
+        out += " A sandboxed host (a Flatpak, a Snap) sees only the folders it is allowed to.";
+    return out;
 }
 
 std::string listingText(const Catalog& c, PluginKind k)
