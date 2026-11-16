@@ -610,7 +610,7 @@ fn radial(x: f32, y: f32, r: f32, c: Color, light: bool) -> Option<Shader<'stati
     let c = if light { as_light(c) } else { c };
     let mut clear = c;
     clear.set_alpha(0.0);
-    RadialGradient::new(Point::from_xy(x, y), Point::from_xy(x, y), r, vec![GradientStop::new(0.0, c), GradientStop::new(1.0, clear)], SpreadMode::Pad, Transform::identity())
+    RadialGradient::new(Point::from_xy(x, y), 0.0, Point::from_xy(x, y), r, vec![GradientStop::new(0.0, c), GradientStop::new(1.0, clear)], SpreadMode::Pad, Transform::identity())
 }
 
 /// Render the video of `events` (`total` output samples at `sr`) with `wav` as its sound.
