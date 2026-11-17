@@ -231,12 +231,17 @@ button { font: inherit; color: inherit; }
 .credit h3 { font-size: var(--step-lead); }
 
 @media (max-width: 760px) {
-  .bar { gap: 16px; padding: 16px; }
-  .bar nav { display: none; }
+  /* a phone: the links on a row of their own under the wordmark, scrolling sideways if they do not fit;
+     --bar is the bar's height, which the hero's fields start under */
+  :root { --bar: 103px; }
+  .bar { gap: 12px 16px; padding: 16px; flex-wrap: wrap; }
+  .bar nav { order: 3; flex: 1 1 100%; margin-left: 0; gap: 14px; justify-content: space-between; overflow-x: auto;
+    scrollbar-width: none; font-size: 0.95rem; padding-bottom: 2px; }
+  .bar nav a { white-space: nowrap; }
   .bar .button { margin-left: auto; padding: 12px 16px; }
-  .hero-fields { min-height: calc(100svh - 70px + 30svh); }
-  .hero-fields::before { height: calc(46svh - 70px); }
-  .hero-title { top: calc(46svh - 70px); font-size: 12vw; width: 94vw; }
+  .hero-fields { min-height: calc(100svh - var(--bar) + 30svh); }
+  .hero-fields::before { height: calc(46svh - var(--bar)); }
+  .hero-title { top: calc(46svh - var(--bar)); font-size: 12vw; width: 94vw; }
   .hero-lead { top: auto; bottom: calc(30svh + 40px); font-size: 1rem; width: min(28ch, 88vw); }
   .showcase-stage { padding: var(--gap) 16px; }
   .showcase-ground { position: relative; inset: auto; height: auto; aspect-ratio: 4 / 5; margin: 0 -16px 32px; width: calc(100% + 32px); max-width: none; }
@@ -271,6 +276,9 @@ button { font: inherit; color: inherit; }
   .now-title { flex: 1 1 0; }
   .now-seek { order: 3; flex: 1 1 100%; }
 }
+
+/* the smallest phones (320 px): the five links still on one row */
+@media (max-width: 360px) { .bar nav { gap: 10px; font-size: 0.85rem; } }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition-duration: 1ms !important; animation-duration: 1ms !important; }

@@ -317,3 +317,12 @@ def test_weidinger_has_its_own_page(site):
     assert 'aria-current="page">Weidinger</a>' in page and ">Brass</a>" not in page + index
     assert 'href="weidinger.html"' in index
     assert "weidinger.html" in open(f"{site}/sitemap.xml").read() and "weidinger.html" in open(f"{site}/llms.txt").read()
+
+
+def test_the_nav_stays_on_a_phone():
+    # under 760 px the links move to a row of their own under the wordmark; no rule hides them (they once vanished)
+    css = open(f"{P.REPO}/site/style.css", encoding="utf-8").read()
+    phone = css[css.index("@media (max-width: 760px)"):]
+    phone = phone[:phone.index("\n}\n")]
+    assert ".bar nav {" in phone and "display: none" not in phone[phone.index(".bar nav {"):phone.index(".bar nav {") + 200]
+    assert "flex-wrap: wrap" in phone[phone.index(".bar {"):]
