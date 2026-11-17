@@ -1,6 +1,6 @@
 This installs Dussek: a physically modeled piano, harpsichords, harps and percussion, as a standalone (Dussek in Applications) and as LV2, CLAP and VST3 plugins (in /Library/Audio/Plug-Ins). The instruments go to /Library/Application Support/Dussek.
 
-Weidinger, a choice of its own (Customize), is the brass: trumpet, horn, tenor and bass trombone and tuba, physically modeled from the same sources, as its own standalone and plugins. A preview: its sound and controls may still change.
+Weidinger, a choice of its own (Customize), is the winds: trumpet, horn, tenor and bass trombone, tuba and clarinet, physically modeled from the same sources, as its own standalone and plugins. A preview: its sound and controls may still change.
 
 Where a host offers LV2 or CLAP, prefer them to the VST3.
 

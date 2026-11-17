@@ -49,7 +49,7 @@ The instruments (41):
 - Percussion: vibraphone, marimba, xylophone, balafon, bells, tubular bells, crotales, two glockenspiels, hand chimes, tongue drum
 - Thumb pianos: kalimba, two mbiras, nyunga nyunga
 
-Weidinger, in the same downloads: a second plugin from the same sources for the brass (trumpet, horn, tenor and bass trombone, tuba), as its own standalone and LV2, CLAP and VST3 plugins. A preview: the installers offer it as a component that can be left out, and its sound and controls may still change.
+Weidinger, in the same downloads: a second plugin from the same sources for the winds (trumpet, horn, tenor and bass trombone, tuba, clarinet), as its own standalone and LV2, CLAP and VST3 plugins. A preview: the installers offer it as a component that can be left out, and its sound and controls may still change.
 
 What it does:
 

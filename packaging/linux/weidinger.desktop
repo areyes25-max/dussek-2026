@@ -1,10 +1,10 @@
 [Desktop Entry]
 Type=Application
 Name=Weidinger
-GenericName=Brass
-Comment=Physically modeled brass: trumpet, trombones, horn and tuba (a preview)
+GenericName=Wind instruments
+Comment=Physically modeled winds: trumpet, trombones, horn, tuba and clarinet (a preview)
 Exec=weidinger
 Icon=weidinger
 Terminal=false
 Categories=AudioVideo;Audio;Midi;
-Keywords=trumpet;trombone;horn;tuba;brass;synthesizer;music;
+Keywords=trumpet;trombone;horn;tuba;clarinet;brass;woodwind;synthesizer;music;

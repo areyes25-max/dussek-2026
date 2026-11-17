@@ -1,5 +1,5 @@
 #!/bin/sh
-# Dussek and Weidinger (the brass, a preview) on Linux: each its standalone, its LV2, CLAP and VST3 plugins;
+# Dussek and Weidinger (the winds, a preview) on Linux: each its standalone, its LV2, CLAP and VST3 plugins;
 # the instruments (each plugin lists its own).
 #   ./install.sh            for you: ~/.lv2, ~/.clap, ~/.vst3, ~/.local/bin, ~/.local/share
 #   sudo ./install.sh --system   for every user, under /usr/local (CLAP: /usr/lib/clap)
