@@ -3,7 +3,7 @@
 #   site/screenshots.sh <out folder>
 # grand-sound.png, grand-felt.png, grand-mics.png (Grand A's tabs), grand-visualization.png (the
 # Visualization panel, a chord ringing with the sustain latch), vibraphone.png (an instrument of
-# another kind); Weidinger's: weidinger-<instrument>.png for each brass instrument (its Sound tab, the microphones at
+# another kind); Weidinger's: weidinger-<instrument>.png for each of its instruments (its Sound tab, the microphones at
 # Player: its bell as held) and weidinger-<instrument>-bell.png (its drawings alone, its card's picture), weidinger-player.png (the tenor trombone's Player tab), weidinger-mics.png (the horn at
 # Close 1). Each run starts a standalone with one instrument and its own empty settings; its
 # audio goes to an unconnected JACK client (a dummy jackd when none runs: CI), never to speakers.
@@ -97,7 +97,7 @@ mics() { # the Mic position menu's entry: player, close1
     case $1 in player) click 200 322 ;; close1) click 200 382 ;; esac
     xdotool mousemove --window "$win" "$((880 * scale))" "$((590 * scale))"; sleep 0.8 # no tooltip in the picture
 }
-for inst in trumpet horn tenor_trombone bass_trombone tuba; do
+for inst in trumpet horn tenor_trombone bass_trombone tuba clarinet; do
     start "$inst" weidinger
     wtab sound; mics player; shot "weidinger-$inst"
     # its card's picture: the two drawings (from above, from the front), the bell as held
@@ -110,7 +110,7 @@ wtab sound; mics close1; shot weidinger-mics
 
 # each one a picture, not an empty window
 for f in grand-sound grand-felt grand-mics grand-visualization vibraphone weidinger-trumpet weidinger-horn \
-         weidinger-tenor_trombone weidinger-bass_trombone weidinger-tuba weidinger-player weidinger-mics; do
+         weidinger-tenor_trombone weidinger-bass_trombone weidinger-tuba weidinger-clarinet weidinger-player weidinger-mics; do
     sd=$(identify -format '%[fx:standard_deviation]' "$out/$f.png")
     awk -v s="$sd" 'BEGIN { exit !(s > 0.02) }' || { echo "screenshots.sh: $f.png is (nearly) uniform" >&2; exit 1; }
 done

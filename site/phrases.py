@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """The website's phrases as Standard MIDI files (CC0, as the demos): one per kind of instrument for
-the menu groups' demos (20–30 s), one per brass instrument for Weidinger's page, and the short ones
+the menu groups' demos (20–30 s), one per instrument for Weidinger's page, and the short ones
 the features play plain, then with the feature. Written with the demos' notation (albums/demos/compose.py: `Piece.seq`); seeded, so the
 same files each run.
 
@@ -195,7 +195,7 @@ def feature_clavichord(bebung=True):
     return p
 
 
-# ---- Weidinger, the brass: one line each (a slur where the notes overlap, a tongued note where they do not), and the
+# ---- Weidinger, the brass and the clarinet: one line each (a slur where the notes overlap, a tongued note where they do not), and the
 # features' short phrases
 
 SLUR, TONGUE = 1.06, 0.82
@@ -242,6 +242,17 @@ def tuba():
     p = Piece("Tuba phrase", 104, seed=25)
     t = p.seq(0, "Bb1:1 r:1 F1:1 r:1 | Bb1:1 r:1 F1:1 r:1 | Eb2:1 r:1 Bb1:1 r:1 | F1:1 r:1 C2:1 r:1", 96, legato=0.5)
     p.seq(t, "Bb1:1 D2:1 F2:1 Bb2:1 | C3:1.5 Bb2:.5 A2:1 F2:1 | G2:1 F2:1 Eb2:1 D2:1 | Bb1:4_", 74, legato=SLUR)
+    return p
+
+
+def clarinet():
+    """A song in D minor, slurred and soft in the low register, then over the break; an arpeggio tongued up to the top."""
+    p = Piece("Clarinet phrase", 88, seed=31)
+    t = p.seq(0, "D3:1 F3:1 A3:1 D4:1 | C4:1.5 A3:.5 F3:1 E3:1 | D3:3 r:1",
+              lambda b: 56 + 3 * (b % 4), legato=SLUR)
+    t = p.seq(t, "A4:1 D5:1.5 C5:.5 Bb4:.5 A4:.5 | G4:1 Bb4:1 A4:2 | F4:1 E4:.5 D4:.5 C#4:1 E4:1 | D4:3 r:1",
+              lambda b: 66 + 2 * ((b - t) % 4), legato=SLUR)
+    p.seq(t, "D4:.5 F4:.5 A4:.5 D5:.5 F5:.5 A5:.5 Bb5:.5 A5:.5 | F5:.5 D5:.5 A4:.5 F4:.5 D4:2_", 92, legato=TONGUE)
     return p
 
 
@@ -308,6 +319,7 @@ PHRASES = {
     "f-clavichord": feature_clavichord, "f-clavichord-plain": lambda: feature_clavichord(bebung=False),
     "silence": silence,
     "trumpet": trumpet, "horn": horn, "tenor-trombone": tenor_trombone, "bass-trombone": bass_trombone, "tuba": tuba,
+    "clarinet": clarinet,
     "f-brass": feature_brass, "f-brass-soft": lambda: feature_brass(40), "f-brass-loud": lambda: feature_brass(118),
     "f-brass-chords": feature_brass_chords, "f-glide": feature_glide, "f-brass-horn": feature_horn,
     "f-sad-trumpet": sad_trumpet,

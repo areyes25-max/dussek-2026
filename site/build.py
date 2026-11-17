@@ -4,7 +4,7 @@
     python3 site/build.py [--renders site/out] [--out site/public]
 
 index.html (the demos, the pieces and performances, the ensemble video, the features, the window,
-the download), weidinger.html (the brass's plugin: its instruments, the brass album, its features, the
+the download), weidinger.html (the winds' plugin: its instruments, the brass album, its features, the
 same download) and credits.html (every instrument's LICENSE.md, the fonts, the MAESTRO files, the
 sounds); the docs stay on GitHub (docs/), where their diagrams render. For search engines and
 language models: each page's preview card (docs/social-preview.png), the start page's schema.org
@@ -29,8 +29,8 @@ ITCH = "https://ccoors.itch.io/dussek"  # the same files, for the itch app (pack
 DESCRIPTION = ("A free piano, harpsichord, harp and percussion instrument: every note simulated, none recorded. "
                "LV2, CLAP, VST3 and a standalone.")
 DOCS = f"{GITHUB}/tree/main/docs"
-WEIDINGER = ("Weidinger, Dussek's second plugin: trumpet, horn, tenor and bass trombone and tuba, physically "
-             "modeled and played as lines. A preview, in the same download.")
+WEIDINGER = ("Weidinger, Dussek's second plugin: trumpet, horn, tenor and bass trombone, tuba and clarinet, "
+             "physically modeled and played as lines. A preview, in the same download.")
 BRASS_SHOTS = [("weidinger-player", "The tenor trombone's Player tab: the virtual player, the air, the glide on the slide"),
                ("weidinger-mics", "The horn's bell from above and from the front, held back and to the right; the microphones at Close 1, on its axis"),
                ("weidinger-trumpet", "The trumpet's Sound tab: the mutes, growl, flutter and vibrato; its bell from the player's ears")]
@@ -137,7 +137,7 @@ def llms_txt(v):
               f"- [itch.io]({ITCH}): the same files, for the itch app's updates", "",
               "## Docs", "",
               f"- [Website]({SITE}): demos of every kind of instrument, the features, screenshots",
-              f"- [Weidinger]({SITE}weidinger.html): the brass's plugin (trumpet, horn, trombones, tuba), a preview in the same download",
+              f"- [Weidinger]({SITE}weidinger.html): the winds' plugin (trumpet, horn, trombones, tuba, clarinet), a preview in the same download",
               f"- [README]({GITHUB}#readme): what it is, how to install and build it",
               f"- [Quick start]({GITHUB}/blob/main/docs/quick-start.md): the first notes in a host or the standalone",
               f"- [The plugin]({GITHUB}/blob/main/docs/plugin.md): every control",
@@ -151,7 +151,7 @@ def llms_txt(v):
 
 def header(root, current=""):
     links = [("Listen", f"{root}index.html#listen"), ("Features", f"{root}index.html#features"),
-             ("Brass", f"{root}weidinger.html"), ("Docs", DOCS), ("Credits", f"{root}credits.html")]
+             ("Weidinger", f"{root}weidinger.html"), ("Docs", DOCS), ("Credits", f"{root}credits.html")]
     items = "".join(f'<a href="{h}"{" aria-current=\"page\"" if n == current else ""}>{n}</a>' for n, h in links)
     return (f'<header class="bar"><a class="wordmark" href="{root}index.html"><img src="{root}icon.png" alt="" width="32" height="32">Dussek</a>'
             f'<nav aria-label="Site">{items}</nav><a class="button" href="{root}index.html#download">Download</a></header>')
@@ -269,7 +269,7 @@ def index(clips, groups, ver):
   <div class="download-words">
     <h2 id="download-title">Download<br>Dussek</h2>
     <p>Version {v}, free: the standalone, LV2, CLAP and VST3, and every instrument; <a href="weidinger.html">Weidinger</a>,
-    the brass, in the same files (a preview). Where a host offers LV2 or CLAP, prefer them to the VST3. <a href="{GITHUB}/releases/tag/v{v}">The release notes</a>; the same files
+    the brass and the clarinet, in the same files (a preview). Where a host offers LV2 or CLAP, prefer them to the VST3. <a href="{GITHUB}/releases/tag/v{v}">The release notes</a>; the same files
     <a href="{ITCH}">on itch.io</a>.</p>
   </div>
   <form class="installer" data-ui action="{GITHUB}/releases/download/v{v}/{assets[0][2]}" method="get">
@@ -283,7 +283,7 @@ def index(clips, groups, ver):
 
     brass = f'''
 <section id="brass" class="field field-dark brass-band" aria-labelledby="brass-title">
-  <h2 id="brass-title">And the brass</h2>
+  <h2 id="brass-title">And the winds</h2>
   <p class="work-note">{esc(WEIDINGER)} <a href="weidinger.html">Listen to Weidinger</a>.</p>
 </section>'''
     return '<main id="main">' + hero + showcase + work + ensemble + features + brass + window + download + "</main>" + footer("")
@@ -310,27 +310,28 @@ MUTE_NAMES = {"straight": "straight", "cup": "cup", "wah": "wah", "wah_stem": "w
 
 
 def brass_facts(d):
-    """A brass instrument's card line from its export: its recorded keys and its mutes."""
+    """A Weidinger instrument's card line from its export: its recorded keys and its mutes (a reed has none)."""
     doc = json.load(open(os.path.join(REPO, "instruments", d, "instrument.json")))
     note = lambda k: f"{NOTE_NAMES[k % 12]}{k // 12 - 1}"
     lo, hi = doc["recorded"]
     mutes = [MUTE_NAMES.get(m, m) for m in doc["brass"].get("order", []) if m != "open"]
-    played = (f"open and with {count(len(mutes))} mutes: {listing(mutes)}" if len(mutes) > 1
+    played = ("a single reed, no mutes" if doc["brass"].get("exciter") == "reed"
+              else f"open and with {count(len(mutes))} mutes: {listing(mutes)}" if len(mutes) > 1
               else f"open and with a {mutes[0]} mute" if mutes else "open (no mutes yet)")
     return f"{note(lo)} to {note(hi)}, {played}."
 
 
 def weidinger(clips, ver):
-    """Weidinger's page: the brass's plugin, in the same download as Dussek."""
+    """Weidinger's page: the winds' plugin, in the same download as Dussek."""
     by = by_section(clips, "weidinger")
     v = esc(ver)
     hero = f'''
 <section class="hero" aria-labelledby="title">
-  {header("", "Brass")}
+  {header("", "Weidinger")}
   <div class="hero-fields">
     <h1 id="title" class="hero-title"><span class="visually-hidden">Weidinger: </span><span class="hero-copy hero-copy-top" aria-hidden="true">Blown,<br>not sampled</span><span class="hero-copy hero-copy-bottom">Blown,<br>not sampled</span></h1>
-    <p class="hero-lead">Weidinger is Dussek's brass: trumpet, horn, trombones and tuba, the lips and the air simulated
-    as you play, a virtual player shaping each line. A preview, in Dussek's download.</p>
+    <p class="hero-lead">Weidinger is Dussek's winds: trumpet, horn, trombones, tuba and clarinet, the lips or the reed
+    and the air simulated as you play, a virtual player shaping each line. A preview, in Dussek's download.</p>
   </div>
 </section>'''
     cards = []
@@ -349,7 +350,7 @@ def weidinger(clips, ver):
 <section id="listen" class="showcase" aria-labelledby="listen-title">
   <div class="showcase-stage">
     <img class="showcase-ground" src="screenshots/weidinger-player.png" alt="" width="1800" height="1248">
-    <h2 id="listen-title" class="showcase-title">{count(len(cards)).capitalize()} brass instruments</h2>
+    <h2 id="listen-title" class="showcase-title">{count(len(cards)).capitalize()} wind instruments</h2>
     <ol class="cards">{"".join(cards)}
     </ol>
   </div>
@@ -384,7 +385,7 @@ def weidinger(clips, ver):
   <div class="download-words">
     <h2 id="download-title">In Dussek's<br>download</h2>
     <p>Weidinger comes in the same files as Dussek, version {v}: its own standalone and LV2, CLAP and VST3 plugins, and
-    the five instruments. The Windows installer and the macOS package offer it as a component that can be left out. A
+    the {count(len(cards))} instruments. The Windows installer and the macOS package offer it as a component that can be left out. A
     preview: its instruments are marked experimental, and its sound and controls may still change.
     <a href="{DOCS}/brass.md">Weidinger's docs</a>.</p>
     <p><a class="button button-large" href="index.html#download">Download Dussek and Weidinger</a></p>
@@ -466,7 +467,7 @@ def main():
     open(os.path.join(args.out, "index.html"), "w", encoding="utf-8").write(page(
         "Dussek: a physically modeled piano", DESCRIPTION, body, "", "home", head=structured(v)))
     open(os.path.join(args.out, "weidinger.html"), "w", encoding="utf-8").write(page(
-        "Weidinger: physically modeled brass · Dussek", WEIDINGER, weidinger(manifest["clips"], v), "", "home weidinger",
+        "Weidinger: physically modeled winds · Dussek", WEIDINGER, weidinger(manifest["clips"], v), "", "home weidinger",
         path="weidinger.html", icon="icon-weidinger.png"))
     credits_page(args.out)
     open(os.path.join(args.out, "llms.txt"), "w", encoding="utf-8").write(llms_txt(v))

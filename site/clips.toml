@@ -5,7 +5,7 @@
 # optional: `set` (plugin controls by symbol, in their own units: what the plugin plays, through
 # its Copy CLI line), `tail` (seconds after the last event, default 4), `seconds` (cut after so
 # many, faded), `listen` (what to listen for), `license` (shown with the clip; default CC0), `short`
-# (a shorter name where space is tight), `page` ("dussek", the default, or "weidinger": the brass's page).
+# (a shorter name where space is tight), `page` ("dussek", the default, or "weidinger": Weidinger's page).
 # A step's `source` from an album's renders (albums/brass/out/) is rendered first when missing.
 # A feature lists `steps`, each a variant of the clip (`label`, and any of `instrument`, `midi`,
 # `set`, `morph`, `input` a sound into the audio input, `source` a sound file played as it is);
@@ -269,7 +269,7 @@ steps = [
   { label = "Meantone 1/4 comma", set = { temperament = 1 } },
 ]
 
-# ---- Weidinger's page (page = "weidinger"): the brass, one demo each, the album's pieces, the features
+# ---- Weidinger's page (page = "weidinger"): the brass and the clarinet, one demo each, the album's pieces, the features
 
 [[clip]]
 id = "trumpet"
@@ -310,6 +310,14 @@ section = "demo"
 title = "Tuba"
 instrument = "tuba"
 midi = "tuba"
+
+[[clip]]
+id = "clarinet"
+page = "weidinger"
+section = "demo"
+title = "Clarinet"
+instrument = "clarinet"
+midi = "clarinet"
 
 # the brass album (albums/brass, CC0): its mixes as albums/brass/mix.py writes them, rendered first when missing
 

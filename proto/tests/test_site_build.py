@@ -305,12 +305,15 @@ def test_the_download_choices_sit_under_their_legend(site):
 
 
 def test_weidinger_has_its_own_page(site):
-    # the brass on their page, not among Dussek's kinds; each card a line from its export; linked from the start page
+    # Weidinger's instruments on their page, not among Dussek's kinds; each card a line from its export; linked from the start page
     page = open(f"{site}/weidinger.html", encoding="utf-8").read()
     index = open(f"{site}/index.html", encoding="utf-8").read()
     clips = tomllib.load(open(f"{P.REPO}/site/clips.toml", "rb"))["clip"]
     brass = [c for c in clips if c.get("page") == "weidinger"]
     assert brass and all(f'audio/{c["id"]}' in page and f'audio/{c["id"]}' not in index for c in brass)
-    assert "Five brass instruments" in page and "F♯3 to D6, open and with six mutes" in page
+    assert "Six wind instruments" in page and "F♯3 to D6, open and with six mutes" in page
+    assert "D3 to B♭5, a single reed, no mutes" in page  # a reed's card names no mutes
+    # the nav names the plugin, not a family it has outgrown
+    assert 'aria-current="page">Weidinger</a>' in page and ">Brass</a>" not in page + index
     assert 'href="weidinger.html"' in index
     assert "weidinger.html" in open(f"{site}/sitemap.xml").read() and "weidinger.html" in open(f"{site}/llms.txt").read()
