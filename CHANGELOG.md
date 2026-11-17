@@ -3,7 +3,16 @@
 What each release changes for a player. From 1.0 on a break needs a major version; before it, a
 break is allowed but listed under "Breaking" (`docs/compatibility.md`).
 
-## Unreleased
+## 0.4.1 — 2026-11-17
+
+### New
+
+- A clarinet in Weidinger, in a new Woodwinds group (experimental): a B-flat clarinet from D3 to
+  B♭5, its reed and its bore simulated as you play. Overlapping keys slur, the others are tongued;
+  key-up lets the breath fade. Growl and flutter do not apply to a reed, so their rows and the
+  aftertouch's choice of them are hidden; the Vibrato stays.
+- Weidinger has its own icon: a trumpet on Dussek's plates, on its window (Linux, Windows), its
+  Start menu entry, its desktop entry and its macOS app (it had Dussek's).
 
 ### Fixed
 
