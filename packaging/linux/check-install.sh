@@ -72,7 +72,7 @@ printf '%s\n' "$list" | grep -q '^mine	' || fail "the player's instrument is gon
 for f in "$HOME/.lv2/dussek.lv2" "$HOME/.clap/dussek.clap" "$HOME/.vst3/dussek.vst3" \
          "$HOME/.lv2/weidinger.lv2" "$HOME/.clap/weidinger.clap" "$HOME/.vst3/weidinger.vst3" \
          "$XDG_DATA_HOME/applications/dussek.desktop" "$XDG_DATA_HOME/applications/weidinger.desktop" \
-         "$XDG_DATA_HOME/icons/hicolor/256x256/apps/dussek.png"; do
+         "$XDG_DATA_HOME/icons/hicolor/256x256/apps/dussek.png" "$XDG_DATA_HOME/icons/hicolor/256x256/apps/weidinger.png"; do
     [ -e "$f" ] || fail "missing after install: $f"
 done
 grep -q "^Exec=$HOME/.local/bin/dussek" "$XDG_DATA_HOME/applications/dussek.desktop" || fail "the desktop entry's Exec"

@@ -4631,3 +4631,23 @@ tongue rolling in the stream); a reed ignores them now.
   shown on the trumpet, the Vibrato stays).
 
 The Vibrato stays as it is.
+
+<a id="step-256"></a>
+## 256. Weidinger's icon
+
+Weidinger showed Dussek's icon everywhere (step 251: "none of its own yet"). The maintainer drew one: a trumpet on Dussek's
+three plates, `packaging/icon/weidinger.svg`. `render.sh` now renders both plugins' icons the same way (the PNG, `.ico`,
+`.icns`, and `plugin/src/ui/WindowIcon-<name>.inc`; Dussek's files come out byte for byte as before). Where Weidinger used
+Dussek's icon it now has its own:
+
+- **The window on X11.** `PianoUI.cpp` includes its plugin's array (by `PE_PLUGIN_KIND`); both arrays have the same three
+  sizes, so DGL's one `DGL_X11_WINDOW_ICON_SIZE` (21510) holds for both. Checked under Xvfb: each standalone's
+  `_NET_WM_ICON` equals its own array, value for value.
+- **Windows.** Each standalone compiles its own `.ico` as resource 1 (`WindowIcon-<name>.rc`); the installer puts
+  `weidinger.ico` beside the exe for the Start menu's shortcut.
+- **Linux.** `weidinger.desktop` names `Icon=weidinger`; the archive carries `weidinger.png`, `install.sh` puts it in
+  `hicolor/256x256/apps` (and the manifest, so `uninstall.sh` removes it), `check-install.sh` looks for it.
+- **macOS.** `make-app.sh` copies `<executable>.icns` into the app and names it in `CFBundleIconFile`.
+- **The site.** `weidinger.html` takes `icon-weidinger.png` as its tab's icon; the header's wordmark stays Dussek's.
+
+The Windows resource and the macOS app are first built in the release workflow.

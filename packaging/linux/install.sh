@@ -65,7 +65,9 @@ for p in dussek weidinger; do
     echo "$share/applications/$p.desktop" >> "$manifest"
     sed "s|^Exec=.*|Exec=$bin/$p|" "$here/$p.desktop" > "$share/applications/$p.desktop"
 done
-put "$here/dussek.png" "$share/icons/hicolor/256x256/apps/dussek.png"
+for p in dussek weidinger; do
+    put "$here/$p.png" "$share/icons/hicolor/256x256/apps/$p.png"
+done
 
 echo "Dussek and Weidinger installed: $bin/dussek and $bin/weidinger, the plugins in $lv2, $clap, $vst3, the instruments in $data/instruments."
 case ":$PATH:" in *":$bin:"*) ;; *) echo "($bin is not on your PATH: start them from the menu or as $bin/dussek, $bin/weidinger)";; esac

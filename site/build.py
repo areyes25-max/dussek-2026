@@ -72,11 +72,12 @@ def stamp(name):
     return hashlib.sha256(open(os.path.join(HERE, name), "rb").read()).hexdigest()[:10]
 
 
-def page(title, description, body, root="", body_class="", path="", head=""):
-    """`path`: the page's address under SITE (its canonical URL and its preview card's)."""
+def page(title, description, body, root="", body_class="", path="", head="", icon="icon.png"):
+    """`path`: the page's address under SITE (its canonical URL and its preview card's); `icon` the tab's icon
+    (Weidinger's page its plugin's)."""
     t = open(os.path.join(HERE, "template.html")).read()
     return t.format(title=esc(title), description=esc(description), body=body, root=root, body_class=body_class,
-                    url=esc(SITE + path), site=SITE, head=head, css_v=stamp("style.css"), js_v=stamp("player.js"))
+                    url=esc(SITE + path), site=SITE, icon=icon, head=head, css_v=stamp("style.css"), js_v=stamp("player.js"))
 
 
 def instruments():
@@ -457,6 +458,7 @@ def main():
     for f in ("style.css", "player.js"):
         shutil.copy(os.path.join(HERE, f), args.out)
     shutil.copy(os.path.join(REPO, "packaging", "icon", "dussek.png"), os.path.join(args.out, "icon.png"))
+    shutil.copy(os.path.join(REPO, "packaging", "icon", "weidinger.png"), os.path.join(args.out, "icon-weidinger.png"))
     shutil.copy(os.path.join(REPO, "docs", "social-preview.png"), args.out)
     groups = manifest.get("groups") or {}
     v = version(args.version)
@@ -465,7 +467,7 @@ def main():
         "Dussek: a physically modeled piano", DESCRIPTION, body, "", "home", head=structured(v)))
     open(os.path.join(args.out, "weidinger.html"), "w", encoding="utf-8").write(page(
         "Weidinger: physically modeled brass · Dussek", WEIDINGER, weidinger(manifest["clips"], v), "", "home weidinger",
-        path="weidinger.html"))
+        path="weidinger.html", icon="icon-weidinger.png"))
     credits_page(args.out)
     open(os.path.join(args.out, "llms.txt"), "w", encoding="utf-8").write(llms_txt(v))
     urls = "".join(f"<url><loc>{SITE}{p}</loc></url>" for p in ("", "weidinger.html", "credits.html"))

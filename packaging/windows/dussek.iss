@@ -75,6 +75,7 @@ Source: "{#Source}\dussek.exe"; DestDir: "{app}"; Components: standalone; Flags:
 Source: "{#Source}\README.txt"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#Source}\LICENSE.txt"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\icon\dussek.ico"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\icon\weidinger.ico"; DestDir: "{app}"; Components: weidinger and standalone; Flags: ignoreversion
 Source: "{#Source}\dussek.lv2\*"; DestDir: "{commoncf64}\LV2\dussek.lv2"; Components: lv2; Flags: ignoreversion recursesubdirs
 Source: "{#Source}\dussek.clap"; DestDir: "{commoncf64}\CLAP"; Components: clap; Flags: ignoreversion
 Source: "{#Source}\dussek.vst3\*"; DestDir: "{commoncf64}\VST3\dussek.vst3"; Components: vst3; Flags: ignoreversion recursesubdirs
@@ -87,7 +88,7 @@ Source: "{#Source}\instruments-brass\*"; DestDir: "{commonappdata}\Dussek\instru
 
 [Icons]
 Name: "{autoprograms}\Dussek"; Filename: "{app}\dussek.exe"; IconFilename: "{app}\dussek.ico"; Components: standalone
-Name: "{autoprograms}\Weidinger"; Filename: "{app}\weidinger.exe"; IconFilename: "{app}\dussek.ico"; Components: weidinger and standalone
+Name: "{autoprograms}\Weidinger"; Filename: "{app}\weidinger.exe"; IconFilename: "{app}\weidinger.ico"; Components: weidinger and standalone
 
 [Run]
 Filename: "{app}\dussek.exe"; Description: "Start Dussek"; Components: standalone; Flags: nowait postinstall skipifsilent

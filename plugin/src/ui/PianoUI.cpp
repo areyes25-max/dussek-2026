@@ -45,8 +45,13 @@
 #include <cstring>
 
 #ifdef DGL_X11_WINDOW_ICON_NAME
-// the standalone's window icon on X11: DPF's pugl.cpp sets _NET_WM_ICON from it (plugin/CMakeLists.txt names it)
-#include "WindowIcon.inc"
+// the standalone's window icon on X11, its plugin's: DPF's pugl.cpp sets _NET_WM_ICON from it
+// (plugin/CMakeLists.txt names it)
+#if PE_PLUGIN_KIND == 1
+#include "WindowIcon-weidinger.inc"
+#else
+#include "WindowIcon-dussek.inc"
+#endif
 static_assert(sizeof(kPeWindowIcon) / sizeof(kPeWindowIcon[0]) == DGL_X11_WINDOW_ICON_SIZE,
               "DGL_X11_WINDOW_ICON_SIZE is the icon's length (packaging/icon/render.sh prints it)");
 const unsigned long* DGL_X11_WINDOW_ICON_NAME = kPeWindowIcon;

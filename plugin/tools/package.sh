@@ -39,7 +39,7 @@ the host's menu, no diagnostics panels in some hosts)."
 case $platform in
     linux)
         cp packaging/linux/install.sh packaging/linux/uninstall.sh packaging/linux/dussek.desktop packaging/linux/weidinger.desktop "$out/"
-        cp packaging/icon/dussek.png "$out/dussek.png"
+        cp packaging/icon/dussek.png packaging/icon/weidinger.png "$out/"
         glibc=$(ldd --version 2>/dev/null | sed -n '1s/.* \([0-9][0-9.]*\)$/\1/p')
         glibc=${glibc:-unknown}
         how="Without installing, ./dussek and ./weidinger play the instruments beside them.

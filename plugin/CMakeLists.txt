@@ -56,18 +56,19 @@ foreach(p ${PE_PLUGINS})
   target_sources(${p}-jack PRIVATE src/StandaloneCli.cpp)
 endforeach()
 
-# the standalones' window icon (in a host the window is the host's): on X11 DPF sets _NET_WM_ICON from the array
-# PianoUI.cpp defines (src/ui/WindowIcon.inc, from packaging/icon/render.sh; the size its length), on Windows
-# from the icon resource compiled into each standalone; macOS's app carries its own (packaging/macos)
+# the standalones' window icon, each plugin's (in a host the window is the host's): on X11 DPF sets _NET_WM_ICON
+# from the array PianoUI.cpp defines (src/ui/WindowIcon-<name>.inc, from packaging/icon/render.sh; the size its
+# length, the same for both), on Windows from the icon resource compiled into each standalone; macOS's app carries
+# its own (packaging/macos)
 if(UNIX AND NOT APPLE)
   target_compile_definitions(dgl-opengl PUBLIC DGL_X11_WINDOW_ICON_NAME=pe_window_icon DGL_X11_WINDOW_ICON_SIZE=21510)
 elseif(WIN32)
   enable_language(RC)
-  file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/generated/WindowIcon.rc
-       "1 ICON \"${CMAKE_CURRENT_SOURCE_DIR}/../packaging/icon/dussek.ico\"\n")
   target_compile_definitions(dgl-opengl PUBLIC DGL_WINDOWS_ICON_ID=1)
   foreach(p ${PE_PLUGINS})
-    target_sources(${p}-jack PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/generated/WindowIcon.rc)
+    file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/generated/WindowIcon-${p}.rc
+         "1 ICON \"${CMAKE_CURRENT_SOURCE_DIR}/../packaging/icon/${p}.ico\"\n")
+    target_sources(${p}-jack PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/generated/WindowIcon-${p}.rc)
   endforeach()
 endif()
 
