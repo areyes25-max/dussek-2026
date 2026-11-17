@@ -1,0 +1,119 @@
+# Iowa MIS B-flat clarinet (anechoic): the first reed instrument, played by the brass family's
+# loop with a reed in place of the lips (Weidinger's woodwinds, a preview)
+[project]
+# recorded anechoic (Iowa MIS), as the Compare page renders it
+recorded_dry = true
+# the family names its chain in projects/steps.toml
+family = "reed"
+
+[menu]
+name = "Clarinet"
+group = "Woodwinds"
+experimental = true
+
+[pose]
+# the bell as played: forward and down, a guess; the ear decides (the azimuth clockwise from the
+# player's front and the elevation up, degrees; the ears from the bell's mouth (right, front, up), m)
+azimuth = 0
+elevation = -45
+ears = [0.0, -0.45, 0.35]
+
+[brass]
+# a reed, not lips, drives the tube
+exciter = "reed"
+# Iowa's runs are named BbClar.<dyn>.<range>.aiff
+stem = "BbClar"
+# the high-pass the cutting looks through: under the lowest note (D3, 147 Hz sounding)
+hp = 70.0
+# the fitted range, MIDI keys (sounding D3 to B-flat 5); the note the fits center on
+low = 50
+high = 82
+center = 66
+# velocity to air: the fit's anchors (x 0.2 / 0.55 / 0.9, the reed's pp, mf and ff) at velocity 1 / 64 / 110, so the
+# keys reach the fitted pp (the brass's 45 + 75 v / 127 gave air 33.6 and over at velocity 1); the ear adjusts it
+vel_air = [[1, 64, 110, 127], [25.4, 69.85, 114.3, 127]]
+# no notes borrowed beyond the recordings
+below = 0
+above = 0
+
+# the reed: its own resonance (Hz), Q, stiffness (N/m per m), the rest opening (m), the channel's width at
+# the low and the high keys (m) and the softness of its closing (m)
+reed_hz = 2500.0
+reed_q = 1.5
+reed_k = 1.2e7
+y0 = 4.5e-4
+width_low = 0.0048
+width_high = 0.012
+soft = 4.5e-5
+
+# the articulation, s: the tongue's hold and its letting go, the seed's length, the glide between
+# slurred notes, the release
+tongue_hold = 0.010
+tongue_let = 0.004
+seed_s = 0.020
+glide_s = 0.1
+# the release: 160 ms, not the spike's 80. At 80 ms the bore's oscillation outlasts the falling breath, the
+# pressure across the reed swings negative and the flow reverses: the low chalumeau brightened 13-21 dB over 6 kHz
+# (the spike's model too), where the recordings darken as they fade. 120 ms still 11 dB at B-flat 3, 160 ms under 2
+release_s = 0.16
+
+# the modes the fits track (up to this Hz), and the pairing of a mode with a partial: at most this
+# many partials away, within this relative tolerance
+fmax = 4500.0
+pair_max = 6.0
+pair_tol = 0.12
+
+# the breath: its level against the recordings' (dB), its band and the low-pass it falls under (Hz: radiated, it lies
+# as flat as the recordings' floor between the harmonics; the spike's)
+breath_trim_db = -8.0
+noise_band = [300.0, 18000.0]
+noise_lp = 500.0
+
+[brass.lattice]
+# the bore's radius (m): a cylinder, which sounds the odd partials
+radius = 0.0073
+# the mouthpiece and barrel (m of the bore, as a cylinder)
+mouth = 0.075
+# (length, radius at the mouth, flare) of the small bell
+bell = [0.11, 0.030, 0.7]
+# (distance from the reed, radius, chimney length) of the register hole, m: it opens the twelfth
+register = [0.150, 0.0015, 0.013]
+# the tone holes: their number, and (the radius of the largest, of the smallest) m
+holes = 19
+hole_radius = [0.005, 0.003]
+# the tone holes' chimney, m
+chimney = 0.0045
+# the clarion register's keys (first, last): the register hole opens there
+clarion = [69, 82]
+
+[[part]]
+id = "clarinet"
+
+# Iowa's runs cut into notes by analysis/split_brass.py
+[[part.source]]
+id = "clarinet_iowa"
+role = "main"
+root = "iowa-mis-woodwinds"
+dynamics = { pp = "pp", mf = "mf", ff = "ff" }
+levels = "recorded"
+
+[part.source.map]
+kind = "pattern"
+glob = "notes/BbClar/*/*.wav"
+match = "relpath"
+regex = 'notes/BbClar/(?P<dynamic>pp|mf|ff)/(?P<midi>\d+)\.wav'
+note = { group = "midi", style = "midi" }
+layers = ["pp", "mf", "ff"]
+order = "layer"
+
+[export]
+# at the grands' loudness: step 173's phrase (an arpeggio over two octaves at 80, four long notes at 95) in the
+# middle register at Audience measured -22.4 LUFS against the grands' median -30.4 (step 243)
+output_gain_db = -7.5
+
+[license]
+set = "University of Iowa Musical Instrument Samples: B-flat clarinet"
+author = "University of Iowa Electronic Music Studios"
+url = "https://theremin.music.uiowa.edu/MIS.html"
+terms = "\"Since 1997, these recordings have been freely available on this website and may be downloaded and used for any projects, without restrictions.\""
+source_license = "free-use"

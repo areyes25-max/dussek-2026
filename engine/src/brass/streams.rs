@@ -1,6 +1,6 @@
 //! What a player reads as it plays: the breath's noise and the slow wander of its air and lips (`Live.__init__`). One table
 //! per instrument, each player reading from its own place, so six players cost one table's memory. The recipes of
-//! `live.py`, by their filters' magnitudes on one long circular noise.
+//! `live.py`, by their filters' magnitudes on one long circular noise (a reed's breath through its own band and low-pass).
 
 use super::core::{OS, SR};
 use super::tables::Tables;
@@ -27,6 +27,12 @@ pub struct Streams {
 fn lowpass(f: f64, fc: f64, fs: f64) -> f64 {
     let (w, wc) = ((std::f64::consts::PI * f / fs).tan(), (std::f64::consts::PI * fc / fs).tan());
     (1.0 / (1.0 + (w / wc).powi(4))).sqrt()
+}
+
+/// A first-order Butterworth low-pass's magnitude (`butter(1, fc)`).
+fn lowpass1(f: f64, fc: f64, fs: f64) -> f64 {
+    let (w, wc) = ((std::f64::consts::PI * f / fs).tan(), (std::f64::consts::PI * fc / fs).tan());
+    (1.0 / (1.0 + (w / wc).powi(2))).sqrt()
 }
 
 /// A band-pass from a second-order Butterworth's magnitude.
@@ -72,8 +78,10 @@ impl Streams {
         let fs = SR * OS as f64;
         let bands = t.noise.clone();
         let log_hz: Vec<f64> = NOISE_HZ.iter().map(|f| f.ln()).collect();
+        // the breath's band: the brass's 500 to 6000 Hz, a reed's its own and its low-pass after it
+        let ([lo, hi], lp) = t.reed().map_or(([500.0, 6000.0], None), |r| (r.noise_band, r.noise_lp));
         let voice = |f: f64| {
-            let g = bandpass(f, 500.0, 6000.0, fs);
+            let g = bandpass(f, lo, hi, fs) * lp.map_or(1.0, |c| lowpass1(f, c, fs));
             // the breath's balance per band, heard against the recordings
             let b = bands.as_ref().map_or(1.0, |b| 10f64.powf(interp(f.max(1.0).ln(), &log_hz, b) / 20.0));
             (g, b)

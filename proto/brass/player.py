@@ -5,7 +5,7 @@ import numpy as np
 import sim, spec
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-NL = 1.24e-8 * spec.S["nl"]  # s/Pa: 1 m of narrow bore, half the mouthpiece pressure travelling out; x its length in bore
+NL = 1.24e-8 * spec.S.get("nl", 0.0)  # s/Pa: 1 m of narrow bore, half the mouthpiece pressure travelling out; x its length in bore
 
 
 def pitch(p, sr=sim.SR, near=None):

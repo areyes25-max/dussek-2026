@@ -1,6 +1,7 @@
 //! A brass export's tables and what the players read (`proto/export_brass.py`, the `brass` block of
 //! instrument.json), looked up by key without allocating.
 
+use super::core::HMAX;
 use super::streams::Streams;
 use crate::instrument::{ArrRef, Data, Error, err};
 use serde::Deserialize;
@@ -27,10 +28,22 @@ struct RawNote {
     f: f64,
     settings: HashMap<String, [f64; 2]>,
     modes: HashMap<String, RawModes>,
-    h: HashMap<String, ArrRef>,
-    r: ArrRef,
+    /// a lip note's (a reed's has `zh` in their place)
+    #[serde(default)]
+    h: Option<HashMap<String, ArrRef>>,
+    #[serde(default)]
+    r: Option<ArrRef>,
     #[serde(default)]
     open: Option<HashMap<String, ArrRef>>,
+    /// a reed note's: its flow-to-air filter, its opening's width (m), its breath and its tongue's push (m/s) per dynamics
+    #[serde(default)]
+    zh: Option<ArrRef>,
+    #[serde(default)]
+    width: Option<f64>,
+    #[serde(default)]
+    breath: Option<HashMap<String, f64>>,
+    #[serde(default)]
+    seed: Option<HashMap<String, f64>>,
 }
 
 #[derive(Clone, Deserialize)]
@@ -125,6 +138,33 @@ pub(crate) struct RawBrass {
     cells: HashMap<String, [f64; 2]>,
     at: HashMap<String, (Vec<f64>, Vec<f64>, f64)>,
     mutes: HashMap<String, RawMute>,
+    /// "lips" (none: the lips) or "reed"; a reed's settings follow
+    #[serde(default)]
+    exciter: Option<String>,
+    #[serde(default)]
+    reed_hz: Option<f64>,
+    #[serde(default)]
+    reed_q: Option<f64>,
+    #[serde(default)]
+    reed_k: Option<f64>,
+    #[serde(default)]
+    tongue_hold: Option<f64>,
+    #[serde(default)]
+    tongue_let: Option<f64>,
+    #[serde(default)]
+    seed_s: Option<f64>,
+    #[serde(default)]
+    glide_s: Option<f64>,
+    #[serde(default)]
+    release_s: Option<f64>,
+    #[serde(default)]
+    pair_max: Option<f64>,
+    #[serde(default)]
+    pair_tol: Option<f64>,
+    #[serde(default)]
+    noise_band: Option<[f64; 2]>,
+    #[serde(default)]
+    noise_lp: Option<f64>,
 }
 
 /// The attack's rise to its pressure, s: `periods` periods of the note at least 8 ms, blended back to 8 ms over the octave above
@@ -165,6 +205,8 @@ impl RawBrass {
             mutes: self.order.clone(),
             plunger: self.order.iter().any(|m| m == "plunger"),
             slide: self.slide,
+            // growl and flutter are the lips' (`player.rs`): a reed ignores them and the aftertouch to either
+            lips: self.exciter.as_deref() != Some("reed"),
             experimental: false,
             pose: pose_of(self.pose.as_ref(), self.bell_radius),
         }
@@ -197,12 +239,51 @@ pub struct Note {
     /// per dynamics the slide's lip offset and the air's factor (`muted.setting`)
     pub settings: [(f64, f64); 3],
     pub modes: [Modes; 3],
-    /// what leaves the bell, per dynamics (the plunger's: shut)
+    /// what leaves the bell, per dynamics (the plunger's: shut; a reed's: empty, its `zh` radiates)
     pub h: [Arc<[f32]>; 3],
-    /// the impedance the modes leave out
+    /// the impedance the modes leave out (a reed's: empty)
     pub r: Arc<[f32]>,
     /// the plunger's open bell
     pub open: Option<[Arc<[f32]>; 3]>,
+    /// a reed's flow-to-air filter (Z H, `Core::change_flow`)
+    pub zh: Option<Arc<[f32]>>,
+    /// the opening's width, m (a lip note's: the export's `width`)
+    pub width: f64,
+    /// a reed's breath (the noise's burst) per dynamics (a lip note's: 0)
+    pub breath: [f64; 3],
+    /// a reed's tongue's push per dynamics, m/s at its peak (`Core::start_seed`; a lip note's: 0)
+    pub seed: [f64; 3],
+}
+
+/// What sets the air column going.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Exciter {
+    Lips,
+    Reed,
+}
+
+/// A reed's settings (`[brass]` of a reed's project).
+#[derive(Clone, Copy, Debug)]
+pub struct Reed {
+    /// its closing mode, Hz, its Q and its stiffness per area, Pa/m
+    pub hz: f64,
+    pub q: f64,
+    pub k: f64,
+    /// how long the tongue holds the reed shut at a note's start, s, and how long it takes to let go
+    pub tongue_hold: f64,
+    pub tongue_let: f64,
+    /// the tongue's push as it lets go, s
+    pub seed_s: f64,
+    /// a slur's pressure moving from the last key's, s
+    pub glide_s: f64,
+    /// the breath's fade at the key's release, s
+    pub release_s: f64,
+    /// the glide pairs modes under this harmonic number, within this log of their ratio
+    pub pair_max: f64,
+    pub pair_tol: f64,
+    /// the breath's band, Hz, and its low-pass (none: none)
+    pub noise_band: [f64; 2],
+    pub noise_lp: Option<f64>,
 }
 
 /// The lips' two modes (`fit4.lips`).
@@ -284,6 +365,8 @@ pub struct Tables {
     /// per mute and table place
     level: Vec<Vec<Level>>,
     at: Vec<At>,
+    /// a reed's settings (none: the lips)
+    reed: Option<Reed>,
     /// the breath and the wander, made once when first asked for (a build's, never the audio thread's)
     streams: OnceLock<Streams>,
 }
@@ -296,7 +379,7 @@ fn filter(data: &Data, r: &ArrRef) -> Result<Arc<[f32]>, Error> {
     Ok(Arc::from(data.f32(r)?))
 }
 
-fn read_note(n: &RawNote, data: &Data, key: &str) -> Result<Note, Error> {
+fn read_note(n: &RawNote, data: &Data, key: &str, reed: bool, width: f64) -> Result<Note, Error> {
     let mut settings = [(0.0, 0.0); 3];
     for (i, d) in DYNS.iter().enumerate() {
         let s = dyn_of(&n.settings, d, key)?;
@@ -314,14 +397,78 @@ fn read_note(n: &RawNote, data: &Data, key: &str) -> Result<Note, Error> {
     let three = |m: &HashMap<String, ArrRef>| -> Result<[Arc<[f32]>; 3], Error> {
         Ok([filter(data, dyn_of(m, "pp", key)?)?, filter(data, dyn_of(m, "mf", key)?)?, filter(data, dyn_of(m, "ff", key)?)?])
     };
+    let need = |what: &str| err(format!("brass: key {key}: no {what}"));
+    // the core's histories hold HMAX taps: a longer filter is refused here, never cut on the audio thread
+    let fits = |what: &str, f: &[f32]| -> Result<(), Error> {
+        if f.len() > HMAX {
+            return Err(err(format!("brass: key {key}: a {what} of {} taps (at most {HMAX})", f.len())));
+        }
+        Ok(())
+    };
+    let open = n.open.as_ref().map(three).transpose()?;
+    for o in open.iter().flatten() {
+        fits("open", o)?;
+    }
+    let modes = [modes("pp")?, modes("mf")?, modes("ff")?];
+    if !reed {
+        let h = three(n.h.as_ref().ok_or_else(|| need("h"))?)?;
+        let r = filter(data, n.r.as_ref().ok_or_else(|| need("r"))?)?;
+        for x in &h {
+            fits("h", x)?;
+        }
+        fits("r", &r)?;
+        return Ok(Note { f: n.f, settings, modes, h, r, open, zh: None, width, breath: [0.0; 3], seed: [0.0; 3] });
+    }
+    let zh = filter(data, n.zh.as_ref().ok_or_else(|| need("zh"))?)?;
+    if zh.is_empty() || zh.len() > HMAX {
+        return Err(err(format!("brass: key {key}: a zh of {} taps (1 to {HMAX})", zh.len())));
+    }
+    let per_dyn = |m: &Option<HashMap<String, f64>>, what: &str| -> Result<[f64; 3], Error> {
+        let m = m.as_ref().ok_or_else(|| need(what))?;
+        Ok([*dyn_of(m, "pp", key)?, *dyn_of(m, "mf", key)?, *dyn_of(m, "ff", key)?])
+    };
+    let empty: Arc<[f32]> = Arc::from(Vec::new());
     Ok(Note {
         f: n.f,
         settings,
-        modes: [modes("pp")?, modes("mf")?, modes("ff")?],
-        h: three(&n.h)?,
-        r: filter(data, &n.r)?,
-        open: n.open.as_ref().map(three).transpose()?,
+        modes,
+        h: [empty.clone(), empty.clone(), empty.clone()],
+        r: empty,
+        open,
+        zh: Some(zh),
+        width: n.width.ok_or_else(|| need("width"))?,
+        breath: per_dyn(&n.breath, "breath")?,
+        seed: per_dyn(&n.seed, "seed")?,
     })
+}
+
+/// The exciter and a reed's settings (an error for a reed missing one).
+fn reed_of(raw: &RawBrass) -> Result<Option<Reed>, Error> {
+    match raw.exciter.as_deref() {
+        None | Some("lips") => return Ok(None),
+        Some("reed") => {}
+        Some(other) => return Err(err(format!("brass: no exciter {other}"))),
+    }
+    let need = |v: Option<f64>, what: &str| v.ok_or_else(|| err(format!("brass: a reed without {what}")));
+    // the articulation's times divide the control steps (a glide of 0 s gave 0 / 0): each over 0 s
+    let time = |v: Option<f64>, what: &str| {
+        let s = need(v, what)?;
+        if s > 0.0 { Ok(s) } else { Err(err(format!("brass: a reed's {what} must be over 0 s (it is {s})"))) }
+    };
+    Ok(Some(Reed {
+        hz: need(raw.reed_hz, "reed_hz")?,
+        q: need(raw.reed_q, "reed_q")?,
+        k: need(raw.reed_k, "reed_k")?,
+        tongue_hold: time(raw.tongue_hold, "tongue_hold")?,
+        tongue_let: time(raw.tongue_let, "tongue_let")?,
+        seed_s: time(raw.seed_s, "seed_s")?,
+        glide_s: time(raw.glide_s, "glide_s")?,
+        release_s: time(raw.release_s, "release_s")?,
+        pair_max: need(raw.pair_max, "pair_max")?,
+        pair_tol: need(raw.pair_tol, "pair_tol")?,
+        noise_band: raw.noise_band.ok_or_else(|| err("brass: a reed without noise_band"))?,
+        noise_lp: raw.noise_lp,
+    }))
 }
 
 impl Tables {
@@ -329,6 +476,7 @@ impl Tables {
         if raw.table.is_empty() || !raw.table.windows(2).all(|w| w[0] < w[1]) {
             return Err(err("brass: the table's keys must rise"));
         }
+        let reed = reed_of(raw)?;
         let mutes = raw.order.clone();
         if mutes.first().map(String::as_str) != Some("open") {
             return Err(err("brass: open comes first"));
@@ -340,7 +488,7 @@ impl Tables {
             for k in &raw.table {
                 let key = k.to_string();
                 let n = rm.notes.get(&key).ok_or_else(|| err(format!("brass: {m} has no key {key}")))?;
-                row.push(read_note(n, data, &key)?);
+                row.push(read_note(n, data, &key, reed.is_some(), raw.width)?);
             }
             notes.push(row);
         }
@@ -448,8 +596,19 @@ impl Tables {
             cells,
             level,
             at,
+            reed,
             streams: OnceLock::new(),
         })
+    }
+
+    /// What sets the air column going.
+    pub fn exciter(&self) -> Exciter {
+        if self.reed.is_some() { Exciter::Reed } else { Exciter::Lips }
+    }
+
+    /// A reed's settings (none: the lips).
+    pub fn reed(&self) -> Option<&Reed> {
+        self.reed.as_ref()
     }
 
     /// The instrument's streams.
@@ -465,6 +624,11 @@ impl Tables {
     /// A table key under a mute (the nearest, off the table).
     pub fn note(&self, mute: usize, key: u8) -> &Note {
         &self.notes[mute][self.place(key)]
+    }
+
+    /// A table place under a mute.
+    pub fn note_at(&self, mute: usize, place: usize) -> &Note {
+        &self.notes[mute][place]
     }
 
     /// The place of the nearest table key.

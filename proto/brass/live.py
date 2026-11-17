@@ -5,11 +5,17 @@ The keys: velocity and overlap (slur) always. Auto: a line is one trumpet, a cho
 trumpet, the last key wins. The virtual player adds the air's shape, vibrato, intonation.
 Wheels and controllers: pitch wheel +-2 semitones, CC1 (the mod wheel) adds air above the keys', CC11 or CC2
 sets the air (takes over once moved), CC70 vibrato (above 0 it replaces the player's), CC21 growl, CC23 flutter,
-aftertouch whichever the window says. The window's Learn buttons move any of them to another controller."""
+aftertouch whichever the window says. The window's Learn buttons move any of them to another controller.
+
+A reed (exciter "reed", reed_tables.py) plays the same player with the reed's own start, slur and release: the
+tongue holds the reed at the key while the breath rises behind it, then lets go with its push; a slur glides the
+fingering and moves the pressure to the new key's; key-up fades the breath; a key during the fade is tongued. The
+reed's frequency is its own: the bend, the vibrato and the wobble move the modes alone. Growl and flutter are the
+lips': a reed ignores them, their controllers and the aftertouch."""
 import collections, ctypes, math, os
 import numpy as np
 from scipy.signal import butter, sosfilt, sosfiltfilt, firwin
-import auto_player, compare5, fit4, fit5, player, rt_tables, sim, spec
+import auto_player, compare5, fit4, fit5, player, reed_tables, rt_tables, sim, spec
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SR = sim.SR
@@ -25,6 +31,12 @@ D = ctypes.POINTER(ctypes.c_double)
 SPEAK = spec.load("speak", {})  # "key_dyn": air x; "key_dyn_first": the attack's push (speak_fit.py)
 LEVEL = spec.load("level", {})  # per mute, "key": output dB at the air's four anchors; "key_dyn": that dynamics' table's own step (level_fit.py)
 NOISE_HZ = (750, 1414, 2828, 5657, 11314)
+# the breath's band, Hz: the brass's 500-6000; a reed's its project's (the spike's 300-18000: the breath fills the
+# recordings' floor over 8 kHz)
+NOISE_BAND = tuple(spec.S.get("noise_band", (500.0, 6000.0)))
+# a reed's breath falls 6 dB per octave over this (Hz; none for the brass): radiated it lies as flat as the recordings'
+# floor between the harmonics (the spike's)
+NOISE_LP = spec.S.get("noise_lp")
 CONTROLS = {"wheel": 1, "air": 11, "vibrato": 70, "growl": 21, "flutter": 23, "glide": 65, "glide_time": 5, "plunger": 4}
 GLIDE_SPAN, GLIDE_T, AUTO_GLIDE = 6, 0.22, ("auto" if spec.S.get("slide") else "off")  # a tritone, the slide's whole travel; s for a minor third
 H_X, DYNS = (0.315, 0.59, 0.9), ("pp", "mf", "ff")  # the air each table's filter was fitted at (harm_fit.py)
@@ -43,6 +55,8 @@ CHORD_S, SLUR_SPAN = 0.03, 5
 TAKE_S, HIDE_S, RISE_S = 0.07, 0.09, 0.06
 VOICES = 6
 SEATS = (0.0, -0.3, 0.3, -0.6, 0.6, -0.15)  # across the stereo image; the first alone is the mono soloist
+REED = spec.S.get("exciter") == "reed"
+FADE_S = 0.01  # rt.c's fingering change (FADE): a reed's opening and breath move to the new key's over it
 
 
 def attack_rise(periods, knee, f):
@@ -69,6 +83,12 @@ def attack_share(share, periods, knee, f):
     return share * (1 - min(1.0, math.log2(f / knee)))
 
 
+def quiet_db(d):
+    """A reed under pp's air (x 0.2): its pressure stays at pp's and its output fades by d / 0.2 instead, dB (-80 dB at
+    no air). The pp sits just over the reed's threshold: a pressure scaled down with the air silenced it within a step."""
+    return 20 * math.log10(max(min(1.0, d / 0.2), 1e-4))
+
+
 _LIB = []
 
 
@@ -79,9 +99,14 @@ def lib():
     l = ctypes.CDLL(spec.build_c("rt.c", ["-O3", "-march=native", "-ffast-math"]))
     l.rt_new.restype = ctypes.c_void_p
     l.rt_filters.argtypes = [ctypes.c_void_p, D, ctypes.c_int, D, ctypes.c_int]
+    l.rt_filters_flow.argtypes = [ctypes.c_void_p, D, ctypes.c_int]
+    l.rt_filters_flow.restype = ctypes.c_int
     dbl = ctypes.c_double
-    l.rt_process.argtypes = [ctypes.c_void_p, ctypes.c_int, dbl, dbl, dbl, dbl, dbl, dbl, dbl, dbl, ctypes.c_int, D, D, D, D,
-                             ctypes.c_int, D, D, D, D, dbl, dbl, dbl, dbl, dbl, D, ctypes.c_long, dbl, D, ctypes.c_int, D]
+    l.rt_process.argtypes = [ctypes.c_void_p, ctypes.c_int, dbl, dbl, dbl, dbl, dbl, dbl, dbl, dbl, dbl, dbl, dbl, dbl, ctypes.c_int,
+                             D, D, D, D, ctypes.c_int, D, D, D, D, dbl, dbl, dbl, dbl, D, ctypes.c_long, dbl, D, ctypes.c_int, D]
+    l.rt_seed.argtypes = [ctypes.c_void_p, dbl, dbl, dbl, dbl]
+    l.rt_glide.argtypes = [ctypes.c_void_p, ctypes.c_int, D, D, D, D, dbl, dbl, dbl, dbl]
+    l.rt_free.argtypes = [ctypes.c_void_p]
     _LIB.append(l)
     return l
 
@@ -93,16 +118,19 @@ def streams(seed):
     """What a seed draws: the breath's noise, the air's and the lips' wobble, the growl's band, the flutter's jitter
     (noise, wp, wl, band, jit). The same for every player of that seed, so built once per process (the noise's 2M
     samples were three quarters of a render): shared, the noise read-only."""
-    key = (seed, tuple(spec.S.get("noise", ())), os.environ.get("BREATH_DB", "0"))
+    shape = noise_shape()
+    key = (seed, tuple(shape or ()), os.environ.get("BREATH_DB", "0"))
     if key in _STREAMS:
         return _STREAMS[key]
     rng = np.random.default_rng(seed)
     n = 1 << 21
-    nz = sosfilt(butter(2, [500, 6000], "bandpass", fs=SR * OS, output="sos"), rng.standard_normal(n))
+    nz = sosfilt(butter(2, list(NOISE_BAND), "bandpass", fs=SR * OS, output="sos"), rng.standard_normal(n))
+    if NOISE_LP:
+        nz = sosfilt(butter(1, NOISE_LP, "lowpass", fs=SR * OS, output="sos"), nz)
     noise = (nz * 0.015 / np.std(nz)).astype(np.float64)
-    if "noise" in spec.S:  # the breath's balance per band, heard against the recordings (BREATH_DB moves it all, by ear)
+    if shape is not None:  # the breath's balance per band, heard against the recordings (BREATH_DB moves it all, by ear)
         fq = np.fft.rfftfreq(n, 1 / (SR * OS))
-        g = np.interp(np.log(np.maximum(fq, 1.0)), np.log(NOISE_HZ), spec.S["noise"]) + float(os.environ.get("BREATH_DB", 0))
+        g = np.interp(np.log(np.maximum(fq, 1.0)), np.log(NOISE_HZ), shape) + float(os.environ.get("BREATH_DB", 0))
         noise = np.fft.irfft(np.fft.rfft(noise) * 10 ** (g / 20), n).astype(np.float64)
     noise.setflags(write=False)
     k = int(60 / DT)
@@ -115,6 +143,21 @@ def streams(seed):
     jit = np.interp(np.arange(k), np.arange(len(j)) * 40, j).tolist()
     _STREAMS[key] = (noise, wp, wl, band, jit)
     return _STREAMS[key]
+
+
+def noise_shape():
+    """The breath's dB per NOISE_HZ band (None: flat): a reed's from its breath fit where it has one, else the project's."""
+    if REED:
+        shape = spec.load("breath", {}).get("shape")
+        if shape is not None:
+            return shape
+    return spec.S.get("noise")
+
+
+def flow_filters(lib, state, zh):
+    """A reed's output stage on the note's flow-to-air filter (rt_filters_flow); rt.c refuses one over its history."""
+    if lib.rt_filters_flow(state, ptr(zh), len(zh)):
+        raise ValueError(f"a flow-to-air filter of {len(zh)} taps: rt.c holds at most 4096 (HMAX)")
 
 
 def ptr(a):
@@ -143,6 +186,11 @@ class Live:
         self.dec = firwin(96, 20000, fs=SR * OS).astype(np.float64)
         _, lp2 = fit4.lips(1.0, fit5.Q)
         self.lr, self.lq, self.ls, self.lc = (np.array([l[i] for l in lp2], float) for i in range(4))
+        if REED:  # the reed for the lips: one mode at its own frequency, its tongue and opening (reed_start, reed_step)
+            self.lr, self.lq, self.ls, self.lc = reed_tables.lips()
+            self.k, self.tk0, self.ck0, self.was, self.lp_from, self.lp_now = 0, None, 0, None, None, None
+            self.wd, self.tg, self.env_now, self.wd_next, self.tg_next = spec.S["width_low"], 0.0, 0.0, spec.S["width_low"], 0.0
+            self.seed_now = None
         self.nl = player.NL * T5["nl"] * SR * OS
         self.t_idx = 0
         self.held = []  # keys down, oldest first
@@ -176,6 +224,8 @@ class Live:
         self.m_count = 0
         self.events = collections.deque()
         self.gain = GAIN * 10 ** ((MAKEUP[mute] + spec.S.get("gain_db", 0.0)) / 20)
+        if REED:
+            self.lip, self.burst = spec.S["reed_hz"], 0.0
 
     def load(self, mute):
         if mute not in self.tables:
@@ -291,9 +341,11 @@ class Live:
         self.releasing = None
         d = self.dyn_level(0.0) / 127
         dyn = self.near(d)
+        # a reed sounding changes its fingering: the old bank glides into the new one
+        was, was_m = (self.note_table, self.m_count) if REED and self.cur is not None else (None, 0)
         n = self.table["notes"][base]
         self.note_table = n
-        self.mu = spec.lip_mu(n["f"])
+        self.mu = reed_tables.mu() if REED else spec.lip_mu(n["f"])
         # the lips' and air's setting for this key on this mute, per dynamics: followed as the air moves
         self.settings = [self.setting_of(m, base, d) for d in ("pp", "mf", "ff")]
         sp, rc = n["modes"][dyn]
@@ -305,8 +357,15 @@ class Live:
             self.opened = self.opened if slur else 0.0
         self.h_fading = self.h_now  # the filter's fade still reads the one before
         self.h_x = max(d, 0.2)
-        self.h = self.h_now = self.leaving(self.h_x)
-        self.lib.rt_filters(self.state, ptr(self.h), len(self.h), ptr(n["r"]), len(n["r"]))
+        if REED:  # the flow through the note's own Z H; the last note's still on the flow over the fade
+            self.h = self.h_now = n["zh"]
+            flow_filters(self.lib, self.state, self.h)
+        else:
+            self.h = self.h_now = self.leaving(self.h_x)
+            self.lib.rt_filters(self.state, ptr(self.h), len(self.h), ptr(n["r"]), len(n["r"]))
+        if was is not None and was_m:
+            self.lib.rt_glide(self.state, was_m, ptr(self.E_r), ptr(self.E_i), ptr(self.r_r), ptr(self.r_i), was["f"], n["f"],
+                              spec.S["pair_max"], spec.S["pair_tol"])
         # where each dynamics' slide puts the note's mode: more air plays sharper, the player corrects by ear
         modes_c = []
         for dd in ("pp", "mf", "ff"):
@@ -317,6 +376,9 @@ class Live:
         self.down = slur and self.cur is not None and m < self.cur
         self.cur = m
         vel = v / 100
+        if REED:
+            self.reed_start(was, slur, d)
+            return
         if slur:
             self.kick = SLUR_KICK * (0.6 + 0.4 * SLUR_HARD)
             self.first, self.scoop = 1.0, 0.0
@@ -340,6 +402,69 @@ class Live:
         self.gain = GAIN * 10 ** ((MAKEUP[self.mute] + spec.S.get("gain_db", 0.0)) / 20)
         self.level_now = self.level_db(max(d, 0.2))  # a new note starts at its own level
         self.level_g = 10 ** (self.level_now / 20)
+
+    def reed_start(self, was, slur, d):
+        """A reed's start at the key, after the fingering's: a slur moves the pressure from the last key's to this one's;
+        a tongued note (from rest, or on the last one's fade) puts the tongue on the reed, holds it while the breath
+        rises behind it and lets go (reed_step). `was`: the table of the note sounding (None: nothing sounds)."""
+        self.ck0, self.was = self.k, was
+        if was is None:
+            self.wd = self.note_table["width"]
+        if slur:
+            self.lp_from = None if self.lp_now is None else list(self.lp_now)
+            return
+        self.lp_from = None
+        # the tongue goes on at the key: on a sounding reed over the key's block (rt.c's ramp), from rest before it
+        if was is None:
+            self.tg = 1.0
+        self.tk0, self.e0 = self.k, self.env_now if was is not None else 0.0
+        self.gain = GAIN * 10 ** ((MAKEUP[self.mute] + spec.S.get("gain_db", 0.0)) / 20)
+        if was is None:  # from rest a tongued note starts at its own level; on a sounding note the level eases there
+            self.level_now = self.level_db(max(d, 0.2)) + quiet_db(d)
+            self.level_g = 10 ** (self.level_now / 20)
+
+    def reed_lp(self, lp):
+        """The key's pressures (log, per dynamics), a slur's on their way from the last key's over glide_s from the key."""
+        if self.lp_from is not None:
+            g = (self.k - self.ck0) / (spec.S["glide_s"] / DT)
+            if g >= 1.0:
+                self.lp_from = None
+            else:
+                lp = [a + (b - a) * g for a, b in zip(self.lp_from, lp)]
+        self.lp_now = lp
+        return lp
+
+    def reed_step(self, x):
+        """The reed's controls at the end of this block, at the air x: (the breath's share of the key's pressure, the
+        reed's frequency, the noise's burst); the tongue and the opening's width for rt_process (tg_next, wd_next), and
+        the tongue's push where it lets go (seed_now, started at the modes' frequency before rt_process). The tongue: on
+        the reed from the key's block, held tongue_hold from the key, off over tongue_let; the breath rises (sin^2) from
+        e0 while it holds. A fingering change moves the width and the breath over FADE_S."""
+        S, n = spec.S, self.note_table
+        env, self.tg_next, self.seed_now = 1.0, 0.0, None
+        if self.tk0 is not None:
+            j = self.k - self.tk0
+            hold, let = S["tongue_hold"] / DT, S["tongue_let"] / DT
+            tg = 1.0 if j <= hold else max(0.0, 1.0 - (j - hold) / let)
+            if j - 1 <= hold < j:
+                self.seed_now = reed_tables.between([n["seed"][d] for d in DYNS], x)
+            if j < hold:
+                env = self.e0 + (1.0 - self.e0) * math.sin(math.pi / 2 * j / hold) ** 2
+            if tg == 0.0:
+                self.tk0 = None
+            self.tg_next = tg
+        burst = reed_tables.between([n["breath"][d] for d in DYNS], x)
+        self.wd_next = n["width"]
+        if self.was is not None:
+            g = (self.k - self.ck0) / (FADE_S / DT)
+            if g >= 1.0:
+                self.was = None
+            else:
+                w = self.was
+                b0 = reed_tables.between([w["breath"][d] for d in DYNS], x)
+                burst = b0 + (burst - b0) * g
+                self.wd_next = w["width"] + (n["width"] - w["width"]) * g
+        return env, S["reed_hz"], burst
 
     def leaving(self, x):
         """What leaves the bell at this air: between the tables' filters, or all the brightening falls at one velocity, where a note changes table; and the
@@ -404,7 +529,7 @@ class Live:
         if self.cur is None:
             return
         self.releasing = 0.0
-        self.rel_len = 0.02 + 0.6 * ((60 if self.tau > 0.8 else 40) / 127) ** 2
+        self.rel_len = spec.S["release_s"] if REED else 0.02 + 0.6 * ((60 if self.tau > 0.8 else 40) / 127) ** 2
         self.last_air = self.air_now if hasattr(self, "air_now") else 80.0
         self.last_off = self.now
 
@@ -448,6 +573,9 @@ class Live:
         self.now += DT
         i = self.t_idx = (self.t_idx + 1) % len(self.wp)
         pm1, lip1, burst1, ratio = 0.0, self.lip, 1.0, 1.0
+        if REED:
+            self.k += 1
+            burst1, self.wd_next, self.tg_next = self.burst, self.wd, self.tg
         if self.cur is not None:
             t = self.tau
             L = self.dyn_level(t)
@@ -475,6 +603,8 @@ class Live:
             else:
                 lp, ce, top = self.table["at"][self.base]
                 st = self.settings
+            if REED:
+                lp = self.reed_lp(lp)
             x = max(d, 0.2)
             if x <= 0.55:
                 w = (x - 0.2) / 0.35; l, c = lp[0] + (lp[1] - lp[0]) * w, ce[0] + (ce[1] - ce[0]) * w
@@ -487,8 +617,12 @@ class Live:
                 g = w / 0.55; dc, air = st[0][0] + (st[1][0] - st[0][0]) * g, st[0][1] + (st[1][1] - st[0][1]) * g
             else:
                 g = (w - 0.55) / 0.45; dc, air = st[1][0] + (st[2][0] - st[1][0]) * g, st[1][1] + (st[2][1] - st[1][1]) * g
-            p = math.exp(l) * air * min(1.0, d / 0.2)
-            self.level_to = self.level_db(x)
+            p = math.exp(l) * air
+            if REED:  # under pp's air the pressure stays at pp's, the output fades (quiet_db)
+                self.level_to = self.level_db(x) + quiet_db(d)
+            else:
+                p *= min(1.0, d / 0.2)
+                self.level_to = self.level_db(x)
             if "open" in self.note_table:
                 if self.plunger_cc is not None:
                     want = self.plunger_cc
@@ -498,14 +632,16 @@ class Live:
                     want = 0.5
                 self.opened += (want - self.opened) * 0.08
                 self.h_x = -1.0
-            if abs(x - self.h_x) > 0.004:
+            if not REED and abs(x - self.h_x) > 0.004:  # a reed's filter is the same at every air
                 self.h_x = x if "open" not in self.note_table else -1.0
                 np.copyto(self.h, self.leaving(x))
             mc = self.modes_c
             tune_c = self.mode_here - (mc[0] + (mc[1] - mc[0]) * w / 0.55 if w < 0.55 else mc[1] + (mc[2] - mc[1]) * (w - 0.55) / 0.45)
             target_lip = self.note_table["f"] * (c + dc - 0.1) * 2 ** (-self.lip_trim / 12)
             # the attack or the slur
-            if self.slur:
+            if REED:
+                env, lip, burst1 = self.reed_step(x)
+            elif self.slur:
                 g = min(1.0, t / 0.025)
                 lip = self.lip_from + (target_lip - self.lip_from) * g
                 lip *= 2 ** (-(SLACK_DOWN if self.down else SLACK_UP) * math.exp(-t / SLACK_T) / 1200)
@@ -520,6 +656,8 @@ class Live:
             if self.releasing is not None:
                 self.releasing += DT
                 env *= max(0.0, 1.0 - self.releasing / self.rel_len)
+            if REED:
+                self.env_now = env
             # vibrato
             semis = self.warp + 2.0 * self.pb - TUNE_FOLLOW * tune_c / 100
             if self.vib_knob > 0:
@@ -530,20 +668,22 @@ class Live:
                 depth, rate_cc = 0.0, 64.0
             self.vib_phase += 2 * math.pi * (3.5 + 4.5 * rate_cc / 127) * DT
             wob = math.sin(self.vib_phase)
-            lip *= 1 + 0.012 * depth * wob
+            if not REED:  # the reed keeps its own frequency
+                lip *= 1 + 0.012 * depth * wob
             semis += 0.35 * depth * wob
             p *= 1 + 0.10 * depth * wob
             if self.virtual:
                 semis += self.shape.bend_cents(t) / 100
+            # growl and flutter: the lips' alone; a reed ignores both (its controls, the aftertouch, the player)
             # growl
-            gr = max(self.growl, self.at_growl)
+            gr = 0.0 if REED else max(self.growl, self.at_growl)
             if gr > 0:
                 b = self.band[i]
                 p *= max(0.3, 1 + GROWL * gr * b)
                 if b > 0.3:
                     burst1 += 4 * gr
             # flutter
-            fl = max(self.flutter, self.at_flutter)
+            fl = 0.0 if REED else max(self.flutter, self.at_flutter)
             if fl > 0:
                 self.fl_phase += 2 * math.pi * 25 * (1 + 0.1 * self.jit[i]) * DT
                 c1 = 0.5 + 0.5 * math.cos(self.fl_phase)
@@ -552,14 +692,17 @@ class Live:
                 p *= 1 - FLUTTER_DEPTH * f2 * shut
                 burst1 += 6 * fl * shut
                 semis -= 0.1 * f2
-            p *= env * (1 + self.wp[i])
-            lip *= 1 + self.wl[i]
+            if REED:  # no wobble: the reed's steady sound is the accepted one's
+                p *= env
+            else:
+                p *= env * (1 + self.wp[i])
+                lip *= 1 + self.wl[i]
             pm1, lip1 = p, lip
             ratio = 2 ** (semis / 12)
             self.tau += DT
             if self.releasing is not None and self.releasing > self.rel_len + 0.6:
                 self.cur = None
-        if LEVEL:  # eased: the air's and the key's changes must not click
+        if LEVEL or REED:  # eased: the air's and the key's changes must not click
             g0 = self.level_g
             self.level_now += (self.level_to - self.level_now) * 0.1
             self.level_g = 10 ** (self.level_now / 20)
@@ -570,12 +713,23 @@ class Live:
             self.E_r[:n], self.E_i[:n] = E.real, E.imag
             r = self.rT * ratio
             self.r_r[:n], self.r_i[:n] = r.real, r.imag
-            self.lib.rt_process(self.state, CTRL, self.pm, pm1, self.lip * self.prev_ratio if hasattr(self, "prev_ratio") else self.lip, lip1 * ratio, self.burst, burst1, self.kick, self.mu, n,
-                                ptr(self.E_r), ptr(self.E_i), ptr(self.r_r), ptr(self.r_i), 2, ptr(self.lr), ptr(self.lq), ptr(self.ls), ptr(self.lc),
-                                spec.S["width"], spec.S["y0"], 1e-4, sim.RHO, float(SR), ptr(self.noise), len(self.noise), self.nl, ptr(self.dec), len(self.dec), ptr(self.out))
+            if REED:  # the reed at its own frequency, its opening and tongue; only the modes take the bend
+                if self.seed_now is not None:  # the push at the note the modes play
+                    self.lib.rt_seed(self.state, self.seed_now, self.note_table["f"] * ratio, spec.S["seed_s"], float(SR))
+                    self.seed_now = None
+                self.lib.rt_process(self.state, CTRL, self.pm, pm1, self.lip, lip1, self.burst, burst1, self.wd, self.wd_next, self.tg, self.tg_next,
+                                    0.0, self.mu, n, ptr(self.E_r), ptr(self.E_i), ptr(self.r_r), ptr(self.r_i), 1, ptr(self.lr), ptr(self.lq), ptr(self.ls),
+                                    ptr(self.lc), spec.S["y0"], spec.S["soft"], sim.RHO, float(SR), ptr(self.noise), len(self.noise), self.nl,
+                                    ptr(self.dec), len(self.dec), ptr(self.out))
+                self.wd, self.tg = self.wd_next, self.tg_next
+            else:
+                self.lib.rt_process(self.state, CTRL, self.pm, pm1, self.lip * self.prev_ratio if hasattr(self, "prev_ratio") else self.lip, lip1 * ratio, self.burst, burst1,
+                                    spec.S["width"], spec.S["width"], 0.0, 0.0, self.kick, self.mu, n,
+                                    ptr(self.E_r), ptr(self.E_i), ptr(self.r_r), ptr(self.r_i), 2, ptr(self.lr), ptr(self.lq), ptr(self.ls), ptr(self.lc),
+                                    spec.S["y0"], 1e-4, sim.RHO, float(SR), ptr(self.noise), len(self.noise), self.nl, ptr(self.dec), len(self.dec), ptr(self.out))
             self.kick = 0.0
             self.pm, self.lip, self.burst, self.prev_ratio = pm1, lip1, burst1, ratio
-            if LEVEL:
+            if LEVEL or REED:
                 self.out *= np.linspace(g0, self.level_g, CTRL, endpoint=False)
             return self.out
         self.out[:] = 0
@@ -583,7 +737,9 @@ class Live:
 
     def reset(self):
         self.state = self.lib.rt_new()
-        if self.m_count:
+        if self.m_count and REED:
+            flow_filters(self.lib, self.state, self.h)
+        elif self.m_count:
             self.lib.rt_filters(self.state, ptr(self.h), len(self.h), ptr(self.note_table["r"]), len(self.note_table["r"]))
 
     def block(self, n):
@@ -788,6 +944,7 @@ def render_events(events, dur, mute="open", virtual=True, seed=1):
             lv.handle(ev[j][1:])
             j += 1
         out[k * CTRL:(k + 1) * CTRL] = lv.step()
+    lv.lib.rt_free(lv.state)
     return out
 
 

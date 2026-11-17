@@ -121,6 +121,9 @@ pub struct BrassInfo {
     pub plunger: bool,
     /// it glides on a slide
     pub slide: bool,
+    /// the lips play it (the export's `exciter` "lips" or none): growl, flutter and the aftertouch to either act; a
+    /// reed ignores all three
+    pub lips: bool,
     pub experimental: bool,
     /// where its bell points as played
     pub pose: crate::mic::BellPose,

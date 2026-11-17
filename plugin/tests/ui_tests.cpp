@@ -651,7 +651,7 @@ TEST(instruments_in_menu_order)
     for (const InstrumentEntry* e : committed().menu(PluginKind::Winds))
         winds.push_back(e->name);
     CHECK(winds == std::vector<std::string>({ "Bass Trombone (experimental)", "Horn (experimental)", "Tenor Trombone (experimental)",
-                                              "Trumpet (experimental)", "Tuba (experimental)" }));
+                                              "Trumpet (experimental)", "Tuba (experimental)", "Clarinet (experimental)" }));
     CHECK(profileByDir("nonesuch") == kProfileCount);
 }
 
@@ -5246,7 +5246,7 @@ TEST(catalog_orders_the_menu)
 TEST(catalog_of_the_committed_instruments)
 {
     const Catalog& c = committed();
-    CHECK(c.menu(PluginKind::Keys).size() == 41 && c.menu(PluginKind::Winds).size() == 5 && c.messages().empty());
+    CHECK(c.menu(PluginKind::Keys).size() == 41 && c.menu(PluginKind::Winds).size() == 6 && c.messages().empty());
     CHECK(c.find("registers_fixture", PluginKind::Keys) != nullptr && c.find("registers_fixture", PluginKind::Keys)->hidden);
     CHECK(c.first(PluginKind::Keys) != nullptr && c.first(PluginKind::Keys)->name == "Grand A");
     const InstrumentEntry* k = c.find("kalimba", PluginKind::Keys);
@@ -7132,6 +7132,7 @@ static InstrumentEntry brassEntry(std::initializer_list<const char*> mutes, bool
     e.info.registers = 1;
     e.info.brass = true;
     e.info.slide = slide;
+    e.info.lips = true;
     e.info.mute_count = (uint32_t)mutes.size();
     uint32_t i = 0;
     for (const char* m : mutes) {
@@ -7223,6 +7224,38 @@ TEST(mute_buttons_follow_the_report)
     }
     CHECK(std::strcmp(muteLabel(tuba, 1), "Straight") == 0);
     CHECK(effectiveMute(tuba, 5) == 0);
+}
+
+TEST(switching_to_an_instrument_without_mutes_hides_mute)
+{
+    // the trumpet with the cup, then the clarinet (no mutes: no row, it plays open), then the trumpet's cup again
+    const InstrumentEntry* trumpet = committed().find("trumpet", PluginKind::Winds);
+    const InstrumentEntry* clarinet = committed().find("clarinet", PluginKind::Winds);
+    CHECK(trumpet != nullptr && clarinet != nullptr);
+    if (trumpet == nullptr || clarinet == nullptr)
+        return;
+    const uint32_t cup = 2;
+    CHECK(paramVisible(kBrassMute, uiContext(trumpet, 2, 0, PluginKind::Winds)) && effectiveMute(*trumpet, cup) == cup);
+    CHECK(!paramVisible(kBrassMute, uiContext(clarinet, 2, 0, PluginKind::Winds)));
+    CHECK(entryMutes(*clarinet) == 0 && effectiveMute(*clarinet, cup) == 0);
+    CHECK(effectiveMute(*trumpet, cup) == cup); // the stored value plays again
+}
+
+TEST(a_reed_has_no_growl_or_flutter)
+{
+    // growl and flutter are the lips' (the report's lips, from the export's exciter): the clarinet's reed shows neither,
+    // nor the aftertouch's choice between them; the trumpet shows all three
+    const InstrumentEntry* trumpet = committed().find("trumpet", PluginKind::Winds);
+    const InstrumentEntry* clarinet = committed().find("clarinet", PluginKind::Winds);
+    CHECK(trumpet != nullptr && clarinet != nullptr);
+    if (trumpet == nullptr || clarinet == nullptr)
+        return;
+    CHECK(trumpet->info.lips && !clarinet->info.lips);
+    for (uint32_t p : { kGrowl, kFlutter, kAftertouchTo }) {
+        CHECK(paramVisible(p, uiContext(trumpet, 2, 0, PluginKind::Winds)));
+        CHECK(!paramVisible(p, uiContext(clarinet, 2, 0, PluginKind::Winds)));
+    }
+    CHECK(paramVisible(kBrassVibrato, uiContext(clarinet, 2, 0, PluginKind::Winds))); // the vibrato stays
 }
 
 TEST(a_mute_is_kept_by_its_kind)
@@ -7353,7 +7386,7 @@ TEST(each_plugin_lists_its_kind)
     std::set<std::string> k, w;
     for (const InstrumentEntry* e : keys) k.insert(e->id);
     for (const InstrumentEntry* e : winds) w.insert(e->id);
-    CHECK(w == std::set<std::string>({ "bass_trombone", "horn", "tenor_trombone", "trumpet", "tuba" }));
+    CHECK(w == std::set<std::string>({ "bass_trombone", "clarinet", "horn", "tenor_trombone", "trumpet", "tuba" }));
     for (const std::string& id : w)
         CHECK(k.count(id) == 0);
     for (const std::string& id : trackedInstruments()) // each instrument is one plugin's
@@ -7369,7 +7402,7 @@ TEST(each_plugin_lists_its_kind)
     CHECK(c.find(grand, PluginKind::Winds) == nullptr && c.find(grand, PluginKind::Keys) != nullptr);
     CHECK(Catalog::outside(trumpet) != nullptr && !ofKind(*Catalog::outside(trumpet), PluginKind::Keys));
     CHECK(choose(c, "", PluginKind::Winds).entry != nullptr && choose(c, "", PluginKind::Winds).entry->info.brass);
-    CHECK(c.groups(PluginKind::Winds) == std::vector<std::string>({ "Brass" }));
+    CHECK(c.groups(PluginKind::Winds) == std::vector<std::string>({ "Brass", "Woodwinds" }));
 }
 
 TEST(an_instrument_of_the_other_plugin_is_not_loaded)

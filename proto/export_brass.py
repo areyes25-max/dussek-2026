@@ -44,13 +44,23 @@ def pose(table):
 
 
 def note_doc(n, blob):
-    """One key under one mute: its modes in f64, its filters in f32."""
+    """One key under one mute: its modes in f64, its filters in f32 (a reed's its flow-to-air filter `zh` in place of
+    `h` and `r`); a reed's also its opening's width (m), its breath (the noise's burst) and its tongue's push (m/s) per
+    dynamics."""
     modes = {d: {"sp": {"re": blob.add(n["modes"][d][0].real), "im": blob.add(n["modes"][d][0].imag)},
                  "rc": {"re": blob.add(n["modes"][d][1].real), "im": blob.add(n["modes"][d][1].imag)}} for d in DYNS}
-    doc = {"f": float(n["f"]), "settings": {d: [float(x) for x in n["settings"][d]] for d in DYNS}, "modes": modes,
-           "h": {d: blob.add(n["h"][d], "f32") for d in DYNS}, "r": blob.add(n["r"], "f32")}
+    doc = {"f": float(n["f"]), "settings": {d: [float(x) for x in n["settings"][d]] for d in DYNS}, "modes": modes}
+    if "zh" in n:  # a reed's flow-to-air filter (rt_filters_flow) in place of the bell's and the residual
+        doc["zh"] = blob.add(n["zh"], "f32")
+    else:
+        doc["h"] = {d: blob.add(n["h"][d], "f32") for d in DYNS}
+        doc["r"] = blob.add(n["r"], "f32")
     if "open" in n:  # the plunger's: "h" shut, "open" the open bell
         doc["open"] = {d: blob.add(n["open"][d], "f32") for d in DYNS}
+    if "width" in n:
+        doc["width"] = float(n["width"])
+        doc["breath"] = {d: float(n["breath"][d]) for d in DYNS}
+        doc["seed"] = {d: float(n["seed"][d]) for d in DYNS}
     return doc
 
 
@@ -70,33 +80,36 @@ def room_feed(table, radius):
     return float(np.sqrt(sum(a) / sum(b)))
 
 
+# a reed's settings, written as the project sets them (a lip export has none: the engine reads lips by default)
+REED_FIELDS = ("reed_hz", "reed_q", "reed_k", "tongue_hold", "tongue_let", "seed_s", "glide_s", "release_s", "pair_max",
+               "pair_tol")
+
+
 def brass_doc(name, blob):
     """What the players read: each value as live.py and rt_tables.py take it."""
-    import fit4
-    import fit5
     import live
-    import player
     import rt_tables
     import spec
     from scipy.signal import firwin
     S = spec.S
     table = rt_tables.TABLE
-    every = ["open", *S["mutes"]]
-    _, lips = fit4.lips(1.0, fit5.Q)
+    every = ["open", *S.get("mutes", [])]
+    v = reed_values(S, live) if live.REED else lip_values(S, live, spec)
     doc = {
         "table": table, "range": playable((table[0], table[-1]), S), "fitted": [S["low"], S["high"]],
-        "slide": bool(S.get("slide")), "gain_db": float(S.get("gain_db", 0.0)),
-        "width": S["width"], "y0": S["y0"], "soft": SOFT, "rho": float(live.sim.RHO),
-        "nl": float(player.NL * live.T5["nl"] * live.SR * live.OS),
-        "mu": S["mu"], "mu_f": S.get("mu_f", 262.0), "mu_p": S.get("mu_p", 0.0),
-        "center": S["center"], "vel_air": S.get("vel_air"), "scoop_span": S.get("scoop_span"), "noise": S.get("noise"),
-        "bell_radius": S["bell"][1], "room_feed": room_feed(table, S["bell"][1]),
-        "lips": {k: [float(l[i]) for l in lips] for i, k in enumerate(("ratio", "q", "sign", "comp"))},
+        "slide": v["slide"], "gain_db": float(S.get("gain_db", 0.0)),
+        "width": v["width"], "y0": S["y0"], "soft": v["soft"], "rho": float(live.sim.RHO),
+        "nl": v["nl"],
+        "mu": v["mu"], "mu_f": v["mu_f"], "mu_p": v["mu_p"],
+        "center": S["center"], "vel_air": S.get("vel_air"), "scoop_span": v["scoop_span"], "noise": v["noise"],
+        "bell_radius": v["bell_radius"], "room_feed": room_feed(table, v["bell_radius"]),
+        "lips": v["lips"],
         "dec": firwin(96, 20000, fs=live.SR * live.OS).tolist(),
         "makeup_db": {m: live.MAKEUP[m] for m in every}, "order": every,
-        "speak": spec.load("speak", {}), "level": spec.load("level", {}), "cells": spec.load("cells", {}),
+        "speak": v["speak"], "level": spec.load("level", {}), "cells": v["cells"],
         "mutes": {},
     }
+    doc.update(v.get("reed", {}))
     # the attack's two settings, written only where the project sets them (an export without them plays as before)
     if S.get("attack_rise_periods"):
         doc["attack_rise_periods"] = float(S["attack_rise_periods"])
@@ -113,6 +126,40 @@ def brass_doc(name, blob):
         doc["at"] = {str(k): [[float(x) for x in a[0]], [float(x) for x in a[1]], float(a[2])] for k, a in t["at"].items()}
         doc["mutes"][m] = {"notes": {str(k): note_doc(t["notes"][k], blob) for k in table}}
     return doc
+
+
+LIPS = ("ratio", "q", "sign", "comp")
+
+
+def lip_values(S, live, spec):
+    """The lips' part of the brass block."""
+    import fit4
+    import fit5
+    import player
+    _, lips = fit4.lips(1.0, fit5.Q)
+    return {"slide": bool(S.get("slide")), "width": S["width"], "soft": SOFT,
+            "nl": float(player.NL * live.T5["nl"] * live.SR * live.OS),
+            "mu": S["mu"], "mu_f": S.get("mu_f", 262.0), "mu_p": S.get("mu_p", 0.0),
+            "scoop_span": S.get("scoop_span"), "noise": S.get("noise"), "bell_radius": S["bell"][1],
+            "lips": {k: [float(l[i]) for l in lips] for i, k in enumerate(LIPS)},
+            "speak": spec.load("speak", {}), "cells": spec.load("cells", {})}
+
+
+def reed_values(S, live):
+    """A reed's part of the brass block: the lips' fields with the values that leave the lips out (one mode at the
+    reed's own frequency, closing with the pressure: sign -1; its mass from its stiffness and frequency; no lip slack,
+    slide, speak or cells; `width` the clarion's, each note carrying its own), the bell the lattice's, the breath's shape
+    the fit's; under "reed" the fields a lip export lacks: the exciter, the reed's settings, the breath's band and
+    low-pass."""
+    import reed_tables
+    lips = reed_tables.lips()
+    return {"slide": False, "width": S["width_high"], "soft": S["soft"], "nl": 0.0,
+            "mu": reed_tables.mu(), "mu_f": 262.0, "mu_p": 0.0, "scoop_span": None, "noise": live.noise_shape(),
+            "bell_radius": S["lattice"]["bell"][1],
+            "lips": {k: [float(x) for x in lips[i]] for i, k in enumerate(LIPS)}, "speak": {}, "cells": {},
+            "reed": {"exciter": "reed", **{k: float(S[k]) for k in REED_FIELDS},
+                     "noise_band": [float(f) for f in live.NOISE_BAND],
+                     **({"noise_lp": float(live.NOISE_LP)} if live.NOISE_LP else {})}}
 
 
 def main():

@@ -412,3 +412,290 @@ fn the_latency_reported_is_the_latency_at_every_rate() {
     }
 }
 
+
+/// The committed clarinet (a reed) at the fit's own level, or `PE_BRASS_EXPORT` when that is a reed's.
+fn reed() -> Option<Instrument> {
+    let is_reed = |d: &PathBuf| {
+        let doc: serde_json::Value = serde_json::from_slice(&std::fs::read(d.join("instrument.json")).unwrap()).unwrap();
+        doc["brass"]["exciter"] == "reed"
+    };
+    let dir = export()
+        .filter(is_reed)
+        .unwrap_or_else(|| PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../instruments/clarinet")));
+    if !dir.join("instrument.json").exists() {
+        return None;
+    }
+    let mut inst = Instrument::load(&dir).expect("the reed loads");
+    inst.output_gain_db = 0.0;
+    Some(inst)
+}
+
+fn finite(mix: &[[f64; CTRL]; 2]) -> bool {
+    mix.iter().flatten().all(|x| x.is_finite())
+}
+
+#[test]
+fn a_reed_note_outside_its_range_is_silent() {
+    // the clarinet plays 50 … 82: a key past either end sounds nothing and takes no player; the ends sound
+    let Some(inst) = reed() else { return };
+    let t = inst.brass.clone().unwrap();
+    for (key, sounds) in [(49u8, false), (50, true), (82, true), (83, false)] {
+        let mut s = family::section(&t, 0);
+        s.post(Ev::On(key, 100.0));
+        let mut mix = [[0.0; CTRL]; 2];
+        let mut p = 0.0;
+        for _ in 0..200 {
+            s.step(&mut mix);
+            assert!(finite(&mix), "key {key}");
+            p += mix.iter().flatten().map(|x| x * x).sum::<f64>();
+        }
+        assert_eq!(p > 0.0, sounds, "key {key}: power {p}");
+        assert_eq!(s.sounding(), usize::from(sounds), "key {key}");
+        if !sounds {
+            assert!(s.voices.iter().all(|v| v.held.is_empty()), "key {key}: a player taken");
+            let mut e = Engine::new(reed().unwrap(), SR).unwrap();
+            dry(&mut e);
+            on(&mut e, 0, key, 100.0);
+            let (l, r) = render(&mut e, 8192);
+            assert_eq!(rms(&l) + rms(&r), 0.0, "key {key}");
+        }
+    }
+}
+
+#[test]
+fn a_reed_bend_keeps_the_reed() {
+    // the wheel and the tuning move the modes, never the reed: its frequency stays reed_hz, the sound finite
+    let Some(inst) = reed() else { return };
+    let t = inst.brass.clone().unwrap();
+    let hz = t.reed().unwrap().hz;
+    for tuned in [false, true] {
+        let mut s = family::section(&t, 0);
+        if tuned {
+            s.voices.iter_mut().for_each(|v| v.set_tuning(std::sync::Arc::new([0.5; 128])));
+        }
+        s.post(Ev::On(66, 90.0));
+        let mut mix = [[0.0; CTRL]; 2];
+        for _ in 0..60 {
+            s.step(&mut mix);
+        }
+        s.post(Ev::Bend(8191.0 / 8192.0));
+        let mut p = 0.0;
+        for _ in 0..300 {
+            s.step(&mut mix);
+            assert!(finite(&mix));
+            assert_eq!(s.voices[0].lip_hz(), hz, "the reed's frequency under the bend (tuned {tuned})");
+            p += mix.iter().flatten().map(|x| x * x).sum::<f64>();
+        }
+        assert!(p > 0.0, "the bent reed sounds (tuned {tuned})");
+    }
+}
+
+#[test]
+fn a_chord_then_a_slur_glides_per_player() {
+    // six keys, a seventh (the oldest's player takes it, tongued on its sounding reed: its modes glide), then all but
+    // one lifted and that one slurred: each time the player that changes glides its own bank, no other
+    let Some(inst) = reed() else { return };
+    let t = inst.brass.clone().unwrap();
+    let mut s = family::section(&t, 0);
+    let mut mix = [[0.0; CTRL]; 2];
+    let keys = [55u8, 59, 62, 66, 69, 74];
+    for k in keys {
+        s.post(Ev::On(k, 85.0));
+    }
+    for _ in 0..60 {
+        s.step(&mut mix);
+        assert!(finite(&mix));
+    }
+    assert_eq!(s.sounding(), 6);
+    let check = |s: &mut dussek::brass::section::Section, ev: Ev, who: usize, to: u8| {
+        let before: Vec<Option<u8>> = s.voices.iter().map(|v| v.cur).collect();
+        s.post(ev);
+        let mut mix = [[0.0; CTRL]; 2];
+        s.step(&mut mix);
+        assert!(finite(&mix));
+        for (i, v) in s.voices.iter().enumerate() {
+            if i == who {
+                assert_eq!(v.cur, Some(to), "player {i} takes the key");
+                assert!(v.gliding(), "player {i} glides its modes");
+            } else {
+                assert_eq!(v.cur, before[i], "player {i} keeps its note");
+                assert!(!v.gliding(), "player {i} glides with another's change");
+            }
+        }
+    };
+    check(&mut s, Ev::On(77, 85.0), 0, 77);
+    for _ in 0..40 {
+        s.step(&mut mix);
+        assert!(finite(&mix));
+    }
+    for k in [55u8, 59, 62, 69, 74, 77] {
+        s.post(Ev::Off(k));
+    }
+    for _ in 0..40 {
+        s.step(&mut mix);
+        assert!(finite(&mix));
+    }
+    check(&mut s, Ev::On(68, 85.0), 3, 68);
+    for _ in 0..400 {
+        s.step(&mut mix);
+        assert!(finite(&mix));
+    }
+    assert_eq!(s.resets, 0);
+}
+
+#[test]
+fn a_reed_key_lifted_in_the_hold_ends_its_note() {
+    // a key up within the tongue's 10 ms: the tongue lets go as ever, the breath fades, the player is free again
+    let Some(inst) = reed() else { return };
+    let t = inst.brass.clone().unwrap();
+    let mut s = family::section(&t, 0);
+    let mut mix = [[0.0; CTRL]; 2];
+    s.post(Ev::On(66, 90.0));
+    s.step(&mut mix);
+    s.step(&mut mix);
+    s.post(Ev::Off(66));
+    let mut p = 0.0;
+    for _ in 0..((1.0 / dussek::brass::player::DT) as usize) {
+        s.step(&mut mix);
+        assert!(finite(&mix));
+        p += mix.iter().flatten().map(|x| x * x).sum::<f64>();
+    }
+    assert!(p > 0.0, "the short note sounds");
+    assert_eq!(s.sounding(), 0, "the note ended");
+    s.post(Ev::On(66, 90.0));
+    let mut q = 0.0;
+    for _ in 0..200 {
+        s.step(&mut mix);
+        q += mix.iter().flatten().map(|x| x * x).sum::<f64>();
+    }
+    assert!(q > 0.0, "the next note sounds");
+}
+
+/// Each control step's level over the last `w` steps (dB), from the steps' energies.
+fn window_db(e: &[f64], w: usize) -> Vec<f64> {
+    (0..e.len()).map(|k| 10.0 * (e[k.saturating_sub(w - 1)..=k].iter().sum::<f64>() / w as f64 + 1e-30).log10()).collect()
+}
+
+#[test]
+fn a_reed_fades_under_pp_s_air() {
+    // under pp's air (x 0.2) a reed holds pp's pressure and fades its output by d / 0.2: the air swept from 0.25 to 0
+    // over 2 s on a held clarion key fades smoothly (no 1.45 ms step's level, over the last 8 steps, more than 1.5 dB
+    // under the last above x 0.05) and the note never dies above x 0.02 (within 6 dB of x 0.2's level less the fade)
+    let Some(inst) = reed() else { return };
+    let t = inst.brass.clone().unwrap();
+    let dt = dussek::brass::player::DT;
+    let (hold, sweep) = ((0.5 / dt) as usize, (2.0 / dt) as usize);
+    for key in [69u8, 74, 79, 82] {
+        let mut s = family::section(&t, 0);
+        s.set_virtual(false);
+        s.post(Ev::Air(0.25 * 127.0));
+        s.post(Ev::On(key, 80.0));
+        let mut mix = [[0.0; CTRL]; 2];
+        let (mut e, mut xs) = (Vec::new(), Vec::new());
+        for k in 0..hold + sweep {
+            let x = if k < hold { 0.25 } else { 0.25 * (1.0 - (k - hold) as f64 / sweep as f64) };
+            s.post(Ev::Air(127.0 * x));
+            s.step(&mut mix);
+            assert!(finite(&mix), "key {key}");
+            e.push(mix.iter().flatten().map(|v| v * v).sum::<f64>());
+            xs.push(x);
+        }
+        let l = window_db(&e, 8);
+        let at_pp = (hold..xs.len()).find(|&k| xs[k] <= 0.2).unwrap();
+        let worst = (hold..xs.len()).filter(|&k| xs[k] > 0.05).map(|k| l[k] - l[k - 1]).fold(f64::INFINITY, f64::min);
+        assert!(worst >= -1.5, "key {key}: a step {worst:.2} dB under the last");
+        for k in at_pp..xs.len() {
+            if xs[k] > 0.02 {
+                let left = l[k] - 20.0 * (xs[k] / 0.2).log10() - l[at_pp];
+                assert!(left > -6.0, "key {key}: at x {:.3} {left:.1} dB under pp's level less the fade: the note died", xs[k]);
+            }
+        }
+    }
+}
+
+#[test]
+fn a_reed_s_tongued_key_in_the_fade_keeps_its_level() {
+    // a key during the release's fade is tongued on the sounding reed: its level eases from the last note's (a tenth of
+    // the way per step), never set at once (key 73's level at mf's air is 8 dB over key 81's)
+    let Some(inst) = reed() else { return };
+    let t = inst.brass.clone().unwrap();
+    let mut s = family::section(&t, 0);
+    s.set_virtual(false);
+    s.post(Ev::Air(0.55 * 127.0));
+    s.post(Ev::On(73, 80.0));
+    let mut mix = [[0.0; CTRL]; 2];
+    for _ in 0..200 {
+        s.step(&mut mix);
+    }
+    s.post(Ev::Off(73));
+    for _ in 0..20 {
+        s.step(&mut mix);
+    }
+    assert!(s.voices[0].releasing.is_some_and(|r| r < s.voices[0].rel_len), "in the fade");
+    let db = |s: &dussek::brass::section::Section| 20.0 * s.voices[0].level_gain().log10();
+    let before = db(&s);
+    s.post(Ev::On(81, 80.0));
+    s.step(&mut mix);
+    assert_eq!(s.voices[0].cur, Some(81));
+    let first = db(&s);
+    for _ in 0..200 {
+        s.step(&mut mix);
+    }
+    let end = db(&s);
+    assert!((end - before).abs() > 5.0, "the keys' levels differ: {before:.1} → {end:.1} dB");
+    assert!((first - before).abs() <= 0.11 * (end - before).abs(), "a step at the key: {before:.1} → {first:.1} dB (to {end:.1})");
+}
+
+#[test]
+fn a_reed_s_velocity_reaches_its_fitted_air() {
+    // the clarinet's vel_air: velocity 1 gives the fitted pp's air (x 0.2, 25.4) and 64 mf's (0.55, 69.85) on every key,
+    // the reed's air carrying no key's offset
+    let Some(inst) = reed() else { return };
+    let t = inst.brass.clone().unwrap();
+    for key in [50u8, 66, 82] {
+        assert!((dussek::brass::shape::level_of(&t, 1.0, key) - 25.4).abs() < 1e-9, "key {key} at velocity 1");
+        assert!((dussek::brass::shape::level_of(&t, 64.0, key) - 69.85).abs() < 1e-9, "key {key} at velocity 64");
+    }
+}
+
+/// A phrase's mix through one section, with or without growl, flutter and the aftertouch (to `to`) at full.
+fn with_controls(t: &std::sync::Arc<dussek::brass::Tables>, controls: bool, to: dussek::brass::player::Aftertouch) -> Vec<f64> {
+    let mut s = family::section(t, 0);
+    s.voices.iter_mut().for_each(|v| v.aftertouch_to = to);
+    if controls {
+        s.post(Ev::Growl(1.0));
+        s.post(Ev::Flutter(1.0));
+        s.post(Ev::Aftertouch(127.0));
+    }
+    let mut mix = [[0.0; CTRL]; 2];
+    let mut out = Vec::new();
+    for k in 0..400 {
+        match k {
+            2 => s.post(Ev::On(62, 90.0)),
+            150 => s.post(Ev::On(74, 70.0)),
+            160 => s.post(Ev::Off(62)),
+            300 => s.post(Ev::Off(74)),
+            _ => {}
+        }
+        s.step(&mut mix);
+        out.extend(mix.iter().flatten());
+    }
+    out
+}
+
+#[test]
+fn growl_and_flutter_leave_a_reed_unchanged() {
+    // growl and flutter are the lips': a reed ignores them, their controllers and the aftertouch to either, sample for
+    // sample; on the brass they change the sound
+    use dussek::brass::player::Aftertouch;
+    let Some(inst) = reed() else { return };
+    let t = inst.brass.clone().unwrap();
+    let plain = with_controls(&t, false, Aftertouch::Growl);
+    assert!(plain.iter().any(|x| *x != 0.0));
+    for to in [Aftertouch::Growl, Aftertouch::Flutter] {
+        assert!(plain == with_controls(&t, true, to), "the reed with growl, flutter and the aftertouch to {to:?}");
+    }
+    let Some(brass) = load() else { return };
+    let b = brass.brass.clone().unwrap();
+    assert!(with_controls(&b, false, Aftertouch::Growl) != with_controls(&b, true, Aftertouch::Growl), "the brass's growl and flutter");
+}

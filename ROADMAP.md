@@ -41,6 +41,10 @@ Nothing in progress; the next item comes from below.
 
 ## Later
 
+- **The clarinet, the follow-ups.**
+  - The altissimo, over B-flat 5 (cross fingerings).
+  - Brass to winds: the `brass` block, the export, the code and the docs say brass where a reed shares them.
+  - Free reeds: a chord organ from the maintainer's own recordings, a Dussek family of its own, not Weidinger.
 - **Signing the releases.** The installers and bundles are unsigned: Windows warns of an unknown publisher,
   macOS asks before opening the package. Windows first: SignPath Foundation's free signing for open source
   (from the release workflow) looks like the way; macOS needs Apple's Developer Program (Developer ID,

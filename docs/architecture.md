@@ -42,7 +42,8 @@ An instrument is a directory under `instruments/` (or any search path of the plu
 
 An instrument is about 0.7 MB (0.4–1.2 MB). The engine derives everything else at load [6]. The
 engine's report on an instrument (`engine/src/info.rs`) says what it has: its body, exciter, stops,
-mallets, range, the preparations that act and the controls without effect. The rules run over the
+mallets, range, the preparations that act and the controls without effect (a bell's: its mutes,
+slide, plunger, and whether the lips play it). The rules run over the
 data, never over a name [77]. The plugin shows exactly what that report allows.
 
 ## Making an instrument
@@ -238,7 +239,18 @@ on their own (octave bands, holding counts). The microphone body is the bell as 
 axis's azimuth and elevation, the player's ears from the mouth): Player and Audience stay with the player, the close positions turn with
 the bell, and the drawing is the bell's solid of revolution seen from above and from the front. The Mute's value names a kind
 (`brass::family::MUTE_KINDS`), so a switch keeps a wah a wah; the reported latency adds the resampler's half and the fifo's mean hold
-at a rate not 44.1 kHz [238].
+at a rate not 44.1 kHz [238]. A reed (an export with `exciter: "reed"`; `proto/brass/reed.py`, `reed_fit.py`, steps `reed_*` in the chain) takes the
+same engine with another exciter: the mouth's pressure closes a mass on a spring (`reed_hz`, `reed_q`, `reed_k`) against the lay, in a
+lattice bore (a cylinder with a register hole) whose modes the player reads as the lips' bank. A slur moves the old note's modes
+to the new one's in pairs (`pair_max`, `pair_tol`, the paired glide) and the pressure over `glide_s`; a tongued start puts the
+tongue on the reed for `tongue_hold` and lets it go over `tongue_let`, a seed starts the note, a release fades the breath over `release_s`
+(160 ms) and a key in the fade is tongued, its level eased from the last note's. Under pp's air (x 0.2) the pressure stays at pp's
+and the output fades by the air instead (the pp sits just over the reed's threshold); a reed's air is the velocity's alone
+(`vel_air`, no key's offset: its pressures are fitted per key). Growl and flutter are the lips': a reed ignores them and the aftertouch
+to either, and the report's `lips` (from `exciter`) hides their rows [255]. The sound is the reed's flow, radiated through each note's own bore and bell
+(Z·H, 4096 taps: three slots, so an old note rings out through its own filter), about 181 M multiply-adds per second per
+voice against the brass's 113 M. The breath is noise in its own band (`noise_band`) behind a low-pass. The port holds to `live.py`
+at -126.0 dB on a phrase with slurs, a key in the fade, a chord, a steal, the air under pp's and the controls [254].
 
 **Cost**: about 12 % of one laptop core (Ryzen 7 7840HS) for a heavily pedaled ff passage of
 88 voices at the Recording position. The other positions cost more, about 16 % at a close one

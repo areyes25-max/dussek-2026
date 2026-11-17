@@ -197,6 +197,9 @@ bool paramActive(uint32_t param, const InstrumentEntry& e, uint32_t micPosition,
             return entryMutes(e) > 0;
         if (param == kGlideMode || param == kGlideHold || param == kGlideTime)
             return i.slide;
+        // growl and flutter are the lips': a reed ignores them and the aftertouch to either
+        if (param == kGrowl || param == kFlutter || param == kAftertouchTo)
+            return i.lips;
         return true;
     }
     // no condition, pillow or preparation on a bell: the report's controls are inert, these have no control of their own

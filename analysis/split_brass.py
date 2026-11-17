@@ -132,7 +132,9 @@ def where(note, root):
 def main(names):
     for name in names or [n for n in P.index()[0] if "brass" in P.config(n)]:
         b = P.config(name)["brass"]
-        root = os.path.join(P.REPO, "data", "iowa-mis-brass")
+        # the project's main source names the folder under data/ its runs lie in
+        mains = [s for part in P.config(name).get("part", []) for s in part.get("source", []) if s.get("role") == "main"]
+        root = os.path.join(P.REPO, "data", mains[0].get("root", "iowa-mis-brass") if mains else "iowa-mis-brass")
         kept = split(root, b["stem"], b["hp"], os.path.join(root, "notes"))
         print(name, len(kept), "notes", {d: sum(1 for x, _ in kept if x == d) for d in ("pp", "mf", "ff")})
 

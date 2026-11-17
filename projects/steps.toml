@@ -243,6 +243,91 @@ run = ["cargo", "run", "--release", "--quiet", "--manifest-path", "engine/Cargo.
 version = 1
 reads = ["project.roll", "project.menu", "project.project", "project.uses", "uses.*:*", "uses.*:export"]
 
+[step.reed_pressures]
+# the reed's air per key and dynamics: a grid above each key's threshold, the recordings' brightness (and the level of
+# pp and ff against mf) chosen as one path over the keys of a register
+scope = "project"
+run = ["python3", "proto/brass/steps.py", "reed_pressures", "{project}"]
+version = 3  # 2: a note is judged by what sounds, the DC left out (the reed's flow alone put the clarion's thresholds at 0.30); 3: the grid from the first point that holds
+# the live player's module reads the later fits when it loads: none of them reaches the grid
+reads = ["project.brass", "project.sources", "project.uses", "project.project", "fit.tuning", "fit.breath", "fit.cells", "fit.cells_mutes", "fit.gain_db", "fit.level", "fit.leveled", "fit.mute_residual",
+    "fit.mute_shapes", "fit.radiation", "fit.residual", "fit.seeds", "fit.speak", "fit.table", "fit.tuning_mutes",
+    "uses.mutes:fit.mute_residual", "uses.mutes:fit.mute_shapes"]
+owns = ["cache.reed_grid", "cache.reed_recording", "fit.pressures"]
+
+[step.reed_tune]
+# the barrel per key: the bore's extra length moves until the mf note plays in tune; a pressure the tuned barrel
+# silences (its threshold moved) moves up its grid to the first point that sounds
+scope = "project"
+run = ["python3", "proto/brass/steps.py", "reed_tune", "{project}"]
+version = 3  # 2: a pressure the barrel silenced moves up its grid (the grid's cache read, the pressures amended); 3: silence without the DC
+reads = ["project.brass", "project.sources", "project.uses", "project.project", "cache.reed_grid", "fit.pressures", "fit.breath", "fit.cells", "fit.cells_mutes", "fit.gain_db", "fit.level", "fit.leveled", "fit.mute_residual",
+    "fit.mute_shapes", "fit.radiation", "fit.residual", "fit.seeds", "fit.speak", "fit.table", "fit.tuning_mutes",
+    "uses.mutes:fit.mute_residual", "uses.mutes:fit.mute_shapes"]
+owns = ["fit.tuning"]
+amends = ["fit.pressures"]
+
+[step.reed_starts]
+# the tongue's push per key and dynamics: the note from the key (the live player's start, from rest) rises to 3 dB
+# under its level as fast as its recording; judged without the breath, with the radiation's correction
+scope = "project"
+run = ["python3", "proto/brass/steps.py", "reed_starts", "{project}"]
+version = 3  # 2: a push its note does not hold at is too small (a pp just over its threshold went to the bracket's floor); 3: after the radiation, its correction on
+# the live player's modules read the later fits when they load: the step replaces what reaches its renders
+reads = ["project.brass", "project.sources", "project.uses", "project.project", "fit.pressures", "fit.tuning", "fit.radiation", "fit.breath", "fit.cells",
+    "fit.cells_mutes", "fit.gain_db", "fit.level", "fit.leveled", "fit.mute_residual", "fit.mute_shapes", "fit.residual",
+    "fit.speak", "fit.table", "fit.tuning_mutes", "uses.mutes:fit.mute_residual", "uses.mutes:fit.mute_shapes"]
+memos = ["cache.tables"]
+owns = ["fit.seeds"]
+
+[step.reed_radiation]
+# the radiation's correction per fingering above 2 kHz: the harmonics' peaks at mf against the recordings', a line over
+# the keys per register; judged without the breath, from the bore's own radiation, with the default push (before the starts)
+scope = "project"
+run = ["python3", "proto/brass/steps.py", "reed_radiation", "{project}"]
+version = 3  # 2: capped at 20 dB (15 held the clarion's 4-8 kHz 3 dB under the spike's); 3: before the starts, the default push
+reads = ["project.brass", "project.sources", "project.uses", "project.project", "fit.pressures", "fit.tuning", "fit.seeds", "fit.breath", "fit.cells",
+    "fit.cells_mutes", "fit.gain_db", "fit.level", "fit.leveled", "fit.mute_residual", "fit.mute_shapes", "fit.residual",
+    "fit.speak", "fit.table", "fit.tuning_mutes", "uses.mutes:fit.mute_residual", "uses.mutes:fit.mute_shapes"]
+memos = ["cache.tables"]
+owns = ["fit.radiation"]
+
+[step.reed_breath]
+# the breath: its level per dynamics and its shape over the octave bands on the floor between the recordings'
+# harmonics, then per key and per key and dynamics on lines through the recordings' floor
+scope = "project"
+run = ["python3", "proto/brass/steps.py", "reed_breath", "{project}"]
+version = 1
+reads = ["project.brass", "project.sources", "project.uses", "project.project", "fit.pressures", "fit.tuning", "fit.seeds", "fit.radiation", "fit.cells",
+    "fit.cells_mutes", "fit.gain_db", "fit.level", "fit.leveled", "fit.mute_residual", "fit.mute_shapes", "fit.residual",
+    "fit.speak", "fit.table", "fit.tuning_mutes", "uses.mutes:fit.mute_residual", "uses.mutes:fit.mute_shapes"]
+memos = ["cache.tables"]
+owns = ["fit.breath"]
+
+[step.reed_levels]
+# the output's level per key at the air's anchors: mf on a line through the recordings' A-weighted levels, pp and ff
+# on lines through the recordings' steps re mf
+scope = "project"
+run = ["python3", "proto/brass/steps.py", "reed_levels", "{project}"]
+version = 1
+reads = ["project.brass", "project.sources", "project.uses", "project.project", "fit.pressures", "fit.tuning", "fit.seeds", "fit.radiation", "fit.breath", "fit.cells",
+    "fit.cells_mutes", "fit.gain_db", "fit.leveled", "fit.mute_residual", "fit.mute_shapes", "fit.residual",
+    "fit.speak", "fit.table", "fit.tuning_mutes", "uses.mutes:fit.mute_residual", "uses.mutes:fit.mute_shapes"]
+memos = ["cache.tables"]
+owns = ["fit.level"]
+
+[step.reed_report]
+# what a person checks a rebuild by: the spec's accepted-state numbers on the live player (the phrase's pitch, steps,
+# breath and bursts over 6 kHz, slurred and tongued; the bands at mf; the dynamics re mf; the starts' rise)
+scope = "project"
+run = ["python3", "proto/brass/steps.py", "reed_report", "{project}"]
+version = 2  # 2: the notes' level and breath end 40 ms before the next, as their pitch; a note without a pitch fails it
+reads = ["project.brass", "project.sources", "project.uses", "project.project", "fit.pressures", "fit.tuning", "fit.seeds", "fit.radiation", "fit.breath",
+    "fit.level", "fit.cells", "fit.cells_mutes", "fit.gain_db", "fit.leveled", "fit.mute_residual", "fit.mute_shapes", "fit.residual",
+    "fit.speak", "fit.table", "fit.tuning_mutes", "uses.mutes:fit.mute_residual", "uses.mutes:fit.mute_shapes"]
+memos = ["cache.tables"]
+owns = ["cache.report"]
+
 [step.brass_fit]
 # the model against the recordings: per key a grid over the lips and the air, the table from it
 scope = "project"
@@ -400,6 +485,9 @@ reads = ["project.brass", "project.sources", "project.uses", "project.project", 
     "fit.cells", "fit.cells_mutes", "fit.gain_db", "fit.level", "fit.leveled", "fit.mute_residual", "fit.mute_shapes",
     "fit.residual", "fit.speak", "fit.table", "fit.tuning", "fit.tuning_mutes", "uses.mutes:fit.mute_residual",
     "uses.mutes:fit.mute_shapes"]
+# a reed's tables are its fits (reed_tables.py): in the reed chain the steps before write them, so they are inputs;
+# the brass have none and no step of theirs writes them, so they stay out of the brass's fingerprints
+seeds = ["fit.breath", "fit.pressures", "fit.radiation", "fit.seeds"]
 memos = ["cache.tables"]
 owns = ["cache.tables_manifest"]
 
@@ -411,6 +499,8 @@ version = 4  # 2: the bell as held (`[pose]`); 3: no silent notes (the engine re
 reads = ["project.brass", "project.export", "project.menu", "project.pose", "project.sources", "project.uses", "project.project", "fit.cells",
     "fit.cells_mutes", "fit.gain_db", "fit.level", "fit.leveled", "fit.mute_residual", "fit.mute_shapes", "fit.residual", "fit.speak",
     "fit.table", "fit.tuning", "fit.tuning_mutes", "uses.mutes:fit.mute_residual", "uses.mutes:fit.mute_shapes"]
+# a reed's fits, as the tables' (brass_tables)
+seeds = ["fit.breath", "fit.pressures", "fit.radiation", "fit.seeds"]
 memos = ["cache.tables"]
 
 [step.brass_report]
@@ -436,6 +526,9 @@ fingered = ["analyze", "pluck", "polarizations", "body_decay", "attack_noise", "
             "register", "knock", "export"]
 guitar = ["analyze", "pluck", "polarizations", "body_modes", "polarizations#2", "body_modes#2",
           "body_decay", "attack_noise", "soundboard", "coupling", "register", "knock", "export"]
+# the reed family: the brass's loop with a reed for the lips, its tables and export the brass's
+reed = ["reed_pressures", "reed_tune", "reed_radiation", "reed_starts", "reed_breath", "reed_levels", "brass_tables",
+        "reed_report", "export_brass"]
 bars = ["modes", "bars", "export_bars"]
 buff = ["fit_buff"]
 derived = ["export"]

@@ -128,6 +128,17 @@ these sets is embedded in or distributed with the engine.
 - Notes from inspection: the horn lacks pp C2-B3 and mf C3-B3 (its project interpolates them). The tuba
   and the bass trombone do not hold below about E1 in the model: their projects start at E1.
 
+## University of Iowa MIS — Woodwinds (B-flat clarinet)
+
+- Location: `iowa-mis-woodwinds/` (download with `just fetch-iowa woodwinds`, URL list in
+  `iowa-mis-woodwinds-links.txt`: the B-flat clarinet runs of https://theremin.music.uiowa.edu/MIS.html)
+- License: the MIS page, for the whole collection: "Since 1997, these recordings have been freely
+  available on this website and may be downloaded and used for any projects, without restrictions." No
+  audio of it is redistributed here.
+- Content: anechoic chromatic runs per dynamic, `BbClar.<pp|mf|ff>.<range>.aiff`, and
+  `BbClar.ambient.silence.aiff`, the room's floor. `analysis/split_brass.py clarinet` cuts them into
+  `notes/BbClar/<dyn>/<midi>.wav`.
+
 ## Versilian Community Sample Library — Keys (VCSL Keys)
 
 - Location: `vcsl-keys/` (https://versilian-studios.com/Distro/VCSL_Keys.zip, 680 MB; repository

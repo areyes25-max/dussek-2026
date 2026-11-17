@@ -288,6 +288,7 @@ typedef struct PeInstrumentInfo {
     char mutes[8][16];      /* "open" first, in the project's order */
     PeBellPose bell;        /* where the bell points as played (pe_mic_geometry's bell) */
     bool first;             /* the menu block's "first": the plugin's default choice */
+    bool lips;              /* brass: the lips play it, growl, flutter and the aftertouch to either act (not on a reed) */
 } PeInstrumentInfo;
 
 /* fills `out` from instrument_dir/instrument.json (any thread, not real-time safe); false (out

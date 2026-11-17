@@ -48,7 +48,7 @@ std::vector<std::string> subdirectories(const std::string& path)
 }
 
 // the groups the shipped instruments use, in menu order; others after them, "Other" last
-const char* const kKnownGroups[] = { "Grand pianos", "Upright pianos", "Rolled pianos", "Harpsichords", "Clavichords", "Harps", "Guitars", "Brass",
+const char* const kKnownGroups[] = { "Grand pianos", "Upright pianos", "Rolled pianos", "Harpsichords", "Clavichords", "Harps", "Guitars", "Brass", "Woodwinds",
     "Percussion", "Thumb pianos", "Zithers" };
 
 /// a group's place: the known ones first, then the unknown ones (alphabetically, by the caller's

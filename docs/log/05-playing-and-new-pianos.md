@@ -4542,3 +4542,92 @@ implied folders per layout, the sandbox folders per environment, and a process w
 per-user install (and not finding it without `FLATPAK_ID`). Checked in a Flatpak DAW: inside its sandbox `dussek list` and
 `weidinger list` find the per-user install, and the plugin plays there. That needs a build against an older glibc than the
 runtime's (the release's, built on Ubuntu 22.04: glibc 2.35); one built on a current distribution does not load.
+
+<a id="step-254"></a>
+## 254. The clarinet in Weidinger
+
+Weidinger's first woodwind: a B-flat clarinet, D3 to B-flat 5, fitted to the Iowa recordings and exported as `instruments/clarinet/`
+(a Woodwinds group after Brass). It reuses the brass's engine and tables; what is new is the exciter.
+
+- **Reed and bore.** The exciter is a reed (a mass on a spring, closed by the pressure) in a lattice bore with a register hole (the
+  clarion from A4, key 69, where the register hole opens: the fit's break is the hole's, not a throat note's). The
+  fit's chain (`reed_*` steps: pressures, tune, starts, radiation, breath, levels, report) ends in the shared
+  `brass_tables` and `export_brass`; a lip export is unchanged byte for byte. The engine's player is the port of
+  `live.py`'s reed path (`engine/src/brass/player.rs`), held to it at -126.0 dB over a 24.5 s phrase (the brass's: -135 to -123 dB),
+  and allocates nothing.
+- **Articulation.** A note starts at the key: a tongue hold of 10 ms, the onset 17 to 38 ms after the key (the starts' rise against the
+  recordings: median 5 ms apart at every dynamics; 25, 33 and 32 of 33 within 10 ms). A key up fades the breath over 160 ms, not the
+  spike's 80 ms: 80 ms brightened the release 13 to 15 dB over 6 kHz where the recordings darken. A key during the fade is tongued,
+  its level eased from the last note's (set at once, it made the tongued changes up to 11.2 dB bright over 6 kHz; eased 9.1 dB).
+  A slur glides the modes in pairs, the pressure over 100 ms from the key. Growl and flutter scale the breath; the virtual player makes
+  no vibrato.
+- **Radiation.** The reed's flow goes through each note's own Z·H (4096 taps, three slots, so a changed note's old flow rings out through
+  its own filter), after a 512-tap residual had made the clarion's second harmonic 5 to 15 dB too strong. The cost is about 181 M
+  multiply-adds per second per voice against the brass's 113 M.
+- **Velocity.** `vel_air` in the project: velocity 1, 64 and 110 reach the fit's anchors (x 0.2, 0.55 and 0.9: air 25.4, 69.85 and
+  114.3), on every key alike (a reed has no key's offset: its pressures are fitted per key). The brass's 45 + 75·v/127 plus the
+  key's offset gave air 33.6 and over at velocity 1, so no key reached the fitted pp. A phrase like the level's (below) reads
+  0.3 dB quieter for it.
+- **Under pp.** Below pp's air (x 0.2) the brass scale the pressure with the air; the reed's pp sits only 0.005 to 0.04 over its
+  threshold, so pp re mf went from -12.5 dB at air 25.4 to -18.3 at 25 and -38.9 at 24 (the median of ten keys, 50 to 82): a
+  pedal's bottom cut out within 1.5 steps. A reed keeps pp's pressure there and fades its output by the air (a gain eased as the
+  level): -12.6, -13.0 and -14.6 dB at air 25, 24 and 20, -26.6 at 5. An air swept from 0.25 to 0 on a held clarion key fades with
+  no step over 1.5 dB.
+- **Level.** `output_gain_db` -7.5: a phrase of 54 to 78 at Audience reads -29.9 LUFS against the grands' -30.4 (the same method gives
+  the trumpet -30.1).
+
+Measured, the fit against the recordings (the spike's own numbers beside; a bold number misses the spike's bound):
+
+| | Spike | Build |
+|---|---|---|
+| phrase pitch, slurred / tongued | within 1 c | 0.68 / 0.65 c |
+| steps between notes, slurred / tongued | 1 to 3 dB | 0.98 to 2.34 / 0.32 to 2.30 dB |
+| breath re note, spread, slurred / tongued | 2.6 / 2.3 dB | 2.37 / **2.87 dB** (key 65 on the way down) |
+| pp re mf, chalumeau / clarion | -17.2 / -9.4 dB | -16.8 / -8.9 dB (recordings -15.9 / -10.0) |
+| ff re mf, chalumeau / clarion | +2.6 / +3.1 dB | +2.6 / +3.1 dB (recordings +2.5 / +2.4) |
+| bands at mf, chalumeau 1 to 2 / 2 to 4 / 4 to 8 kHz | -2.5 / -1.6 / -1.5 dB | -1.6 / -0.6 / +0.5 dB |
+| bands at mf, clarion | +3.5 / +0.2 / -3.1 dB | +2.4 / -0.2 / -0.4 dB |
+| starts' rise, median difference pp / mf / ff | 5 / 5 / 5 ms | 5 / 5 / 5 ms |
+| starts within 10 ms (of 33), pp / mf / ff | 28 / 33 / 32 | 25 / 33 / 32 |
+| note changes over 6 kHz, at most, slurred / tongued | 6.5 / 3.9 dB | **9.3 / 9.1 dB** |
+
+Known gaps, as in `docs/brass.md`:
+- the note changes are brighter over 6 kHz than the steady notes, by 9.3 dB (slurred) and 9.1 dB (tongued) at most;
+- a pitch wheel of +2 semitones plays about 13 dB down;
+- key 76 at pp is an outlier among the starts: a rise of 20 ms against the recording's 250, its level anchor 12.4 dB over its mf;
+- the chalumeau's lowest keys' Z·H is up to 2.2 dB off;
+- the low keys' ff has mf's timbre, as in the recordings;
+- the chalumeau at pp lacks the reed-colored breath at 2 to 4 kHz;
+- the tongued breath's spread is 2.87 dB, key 65 low;
+- growl at full on the clarion's pp: keys 71 to 82 sound 12 to 26 dB under their pp (its dips in pressure take the reed under its
+  threshold), at mf 2 to 7 dB;
+- the Vibrato knob at full swings the level 12 to 18 dB within each cycle, at pp and mf alike.
+
+Open for the ear: the pose, the velocity's air (`vel_air`), the fade under pp, the release of 160 ms and the new start.
+Left for later (`ROADMAP.md`): the altissimo, brass to winds in the code and the docs, free reeds (a chord organ) as a Dussek family.
+
+<a id="step-255"></a>
+## 255. No growl or flutter on a reed
+
+By ear: Growl and Flutter sounded terrible on the clarinet. Step 254 scaled the reed's own breath by the brass's shares (growl
+x 5 at full, flutter x 7 at its shut), and the growl's dips in pressure took the clarion's pp under its threshold: keys 71 to 82
+12 to 26 dB under their pp, 2 to 7 dB at mf. They are the lips' (a growl is the voice behind the buzzing lips, a flutter the
+tongue rolling in the stream); a reed ignores them now.
+
+- **The players.** `live.py` and `player.rs` take growl and flutter as 0 on a reed: CC 21 and 23, the aftertouch to either, the
+  virtual player alike. The reed's scaling of its breath (step 254) is gone; the brass's growl and flutter are unchanged, bit for
+  bit (the port holds the horn at -135.4 dB, the tenor's plunger at -122.8, the tuba's attack variants at -137.8). The
+  reed's port phrase still sends both and the aftertouch: both players ignore them alike, at -126.1 dB.
+- **The report.** `BrassInfo::lips` (the FFI's `lips`), from the export's `exciter` ("lips" or none): growl, flutter and the
+  aftertouch's target act only there. `engine/tests/no_effect.rs` renders every bell's players with full growl, full flutter
+  and the aftertouch's other target under a half press: each acts exactly where the report says lips (the five brass), none
+  on the clarinet. No re-export: the fact is the export's `exciter`.
+- **The plugin.** `paramActive` hides Growl, Flutter and Aftertouch to where the report has no lips;
+  `visibility-weidinger.txt` changes in the clarinet's 36 `visible` rows alone (`growl`, `flutter`, `aftertouch_to` gone), the
+  brass's rows unchanged.
+- **Tests.** `test_growl_and_flutter_leave_a_reed_unchanged` (the prototype: the output and every block's controls equal with CC 21,
+  23 and the aftertouch to growl or to flutter at full) and `growl_and_flutter_leave_a_reed_unchanged` (the engine's section,
+  sample for sample; on the trombone they change the sound); `a_reed_has_no_growl_or_flutter` (the UI: hidden on the clarinet,
+  shown on the trumpet, the Vibrato stays).
+
+The Vibrato stays as it is.

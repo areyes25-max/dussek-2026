@@ -1,7 +1,8 @@
 //! The virtual player's curves for one note (`auto_player.Shape`): functions of the time since its key went down.
-//! Everything in them was known the moment the key went down.
+//! Everything in them was known the moment the key went down. A reed plays without the vibrato and the scoop: its tone
+//! is held straight (its draws stay, so the rest stays).
 
-use super::tables::Tables;
+use super::tables::{Exciter, Tables};
 use crate::noise::Rng;
 
 /// One note's random numbers, in their final units.
@@ -46,15 +47,18 @@ impl DrawSource for SeededDraws {
     }
 }
 
-/// Air for a key: how hard it was struck, and higher notes a little more (`auto_player.level_of`).
+/// Air for a key: how hard it was struck, and higher notes a little more (`auto_player.level_of`). A reed's air is the
+/// velocity's alone: its pressures are fitted per key, so they carry what the higher notes' more stands in for.
 pub fn level_of(t: &Tables, v: f64, m: u8) -> f64 {
+    let reed = t.exciter() == Exciter::Reed;
     let dm = (f64::from(m) - t.center).clamp(-12.0, 12.0);
     match &t.vel_air {
         // the whole of the dynamics from the keys; the higher notes' more goes to nothing at the top
         Some([x, y]) => {
             let b = crate::noise::interp(v, x, y);
-            b + dm * (1.0 - b / 127.0)
+            if reed { b } else { b + dm * (1.0 - b / 127.0) }
         }
+        None if reed => 45.0 + 75.0 * v / 127.0,
         None => 45.0 + 75.0 * v / 127.0 + dm,
     }
 }
@@ -70,6 +74,8 @@ pub struct Shape {
     rate0: f64,
     off: f64,
     scoops: bool,
+    /// no vibrato
+    reed: bool,
 }
 
 impl Shape {
@@ -90,7 +96,8 @@ impl Shape {
             depth: 70.0 * spread(d.depth, 0.95),
             rate0: spread(d.rate, 39.0),
             off: d.off.clamp(-12.0, 12.0) * variation,
-            scoops: !slur && d.scoop < 0.15 * variation,
+            scoops: !slur && d.scoop < 0.15 * variation && t.exciter() == Exciter::Lips,
+            reed: t.exciter() == Exciter::Reed,
         }
     }
 
@@ -105,6 +112,9 @@ impl Shape {
     }
 
     pub fn vibrato(&self, t: f64) -> f64 {
+        if self.reed {
+            return 0.0;
+        }
         self.depth * ((t - self.on) / 0.8).min(1.0).max(0.0)
     }
 

@@ -17,6 +17,8 @@ const CEILINGS: &[(&str, f32)] = &[
     ("tenor_trombone_iowa", 0.0),
     ("trumpet_iowa", 0.0),
     ("tuba_iowa", 0.0),
+    // the clarinet on Iowa's runs, one decay flag in 138 takes (0.7 per 100, rounded up)
+    ("clarinet_iowa", 1.0),
     ("harpsichord_e_lower", 5.0),
     ("harpsichord_e_upper", 0.0),
     ("balafon_hard", 0.0),

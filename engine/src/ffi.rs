@@ -1633,6 +1633,8 @@ pub struct PeInstrumentInfo {
     pub bell: PeBellPose,
     /// the menu block's `first`: the plugin's default choice
     pub first: bool,
+    /// the lips play it (`info::BrassInfo::lips`): growl, flutter and the aftertouch to either act; not on a reed
+    pub lips: bool,
 }
 
 /// Where a bell points and where its player's ears are (`mic::BellPose`): degrees from the player's front toward the right
@@ -1722,6 +1724,7 @@ impl PeInstrumentInfo {
             o.brass = true;
             o.slide = b.slide;
             o.plunger = b.plunger;
+            o.lips = b.lips;
             o.experimental = b.experimental;
             o.play_lo = u32::from(b.low);
             o.play_hi = u32::from(b.high);

@@ -184,7 +184,7 @@ reproduce *projects:
 
 # ---------------------------------------------------------------- data
 
-# Download a University of Iowa MIS set (piano, guitar or brass) into data/iowa-mis-<set>/; re-runnable
+# Download a University of Iowa MIS set (piano, guitar, brass or woodwinds) into data/iowa-mis-<set>/; re-runnable
 [group('data')]
 fetch-iowa set="piano":
     #!/usr/bin/env bash

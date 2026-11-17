@@ -38,8 +38,65 @@ CTRL, DT, SR = live.CTRL, live.DT, live.SR
 EDGES = [100 * 2.0 ** i for i in range(8)]
 
 
+def reed_phrase():
+    """A reed's: a line tongued and slurred (over the register change 67 → 70), a key in the release's fade, a key lifted
+    in the tongue's hold, a chord, harmony under a slur, a six-key chord and a seventh key (a steal), a swell, the air
+    under pp's to none and back, a bend,
+    growl and flutter (a reed ignores them: sent, both players must ignore them alike), the wheels and the aftertouch,
+    solo and the sound off: (s, kind, ...)."""
+    ev, t = [], 0.1
+    for m, d, v, gap in ((60, .3, 80, .06), (62, .3, 64, .06), (64, .3, 90, -.02), (67, .3, 70, -.02), (70, .35, 90, -.02),
+                         (69, .3, 60, -.02), (65, .5, 100, .1)):
+        ev += [(t, "on", m, v), (t + d - gap, "off", m)]
+        t += d
+    t += 0.4
+    ev += [(t, "on", 62, 90), (t + 0.3, "off", 62), (t + 0.38, "on", 64, 80), (t + 0.7, "off", 64)]  # a key in the fade
+    t += 1.0
+    ev += [(t, "on", 66, 90), (t + 0.005, "off", 66), (t + 0.3, "on", 71, 90), (t + 0.304, "off", 71)]  # lifted in the hold
+    t += 0.8
+    for m in (60, 64, 67):  # a chord
+        ev += [(t, "on", m, 90), (t + 1.0, "off", m)]
+    t += 1.5
+    ev += [(t, "on", 66, 80), (t + 0.25, "on", 68, 80), (t + 1.1, "off", 68), (t + 1.3, "off", 66)]  # a key left down under a slur
+    t += 1.8
+    for i, m in enumerate((55, 59, 62, 66, 69, 74)):  # six keys, then a seventh: the oldest's player takes it
+        ev += [(t + 0.002 * i, "on", m, 85), (t + 1.0, "off", m)]
+    ev += [(t + 0.3, "on", 77, 85), (t + 1.0, "off", 77)]
+    t += 1.5
+    ev.append((t, "on", 64, 60))
+    for i in range(41):
+        ev.append((t + 0.1 + i * 0.04, "cc", 11, 40 + 87 * i / 40))
+    for i in range(41):
+        ev.append((t + 1.8 + i * 0.04, "cc", 11, 127 - 87 * i / 40))
+    ev.append((t + 3.5, "off", 64))
+    t += 4.0
+    ev.append((t, "on", 74, 70))  # under pp's air (25.4) to none and back: the pressure stays at pp's, the output fades
+    for i in range(41):
+        ev.append((t + 0.1 + i * 0.03, "cc", 11, 40 - 40 * i / 40))
+    for i in range(11):
+        ev.append((t + 1.5 + i * 0.03, "cc", 11, 40 * i / 10))
+    ev.append((t + 2.0, "off", 74))
+    t += 2.4
+    ev += [(t, "on", 66, 90), (t + 0.2, "pb", 1.0), (t + 0.45, "pb", -1.0), (t + 0.7, "pb", 0.0), (t + 1.0, "off", 66)]  # a bend
+    t += 1.4
+    ev += [(t, "cc", 21, 90), (t + 0.05, "on", 67, 90), (t + 0.8, "off", 67), (t + 0.9, "cc", 21, 0)]
+    t += 1.2
+    ev += [(t, "cc", 23, 90), (t + 0.05, "on", 67, 90), (t + 0.8, "off", 67), (t + 0.9, "cc", 23, 0)]
+    t += 1.2
+    ev += [(t, "on", 63, 90), (t + 0.3, "cc", 1, 80), (t + 0.6, "cc", 1, 0), (t + 0.7, "cc", 70, 80), (t + 1.0, "cc", 70, 0),
+           (t + 1.1, "at", 100), (t + 1.4, "at", 0), (t + 1.5, "off", 63)]
+    t += 1.9
+    ev += [(t, "mode", "solo"), (t + 0.1, "on", 66, 90), (t + 0.5, "on", 68, 90), (t + 0.9, "off", 68), (t + 1.0, "off", 66), (t + 1.3, "mode", "auto")]
+    t += 1.8
+    ev += [(t, "on", 66, 90), (t + 0.4, "cc", 123, 0)]
+    t += 1.2
+    return sorted(ev, key=lambda e: e[0]), t
+
+
 def phrase():
     """A line, a chord, harmony under a slur, a swell, a glide, growl and flutter, the wheels: (s, kind, ...)."""
+    if live.REED:
+        return reed_phrase()
     c = (spec.S["low"] + spec.S["high"]) // 2
     ev, t = [], 0.1
     for m, d, v, gap in ((0, .35, 80, .06), (3, .3, 64, -.02), (7, .3, 90, -.02), (5, .25, 40, .1), (7, .25, 110, -.02), (12, 1.2, 105, .15)):

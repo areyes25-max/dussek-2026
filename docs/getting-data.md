@@ -46,6 +46,16 @@ once. The trumpet's mutes are compared with VSCO 2 CE's muted notes (CC0, `data/
 |---|---|---|
 | University of Iowa MIS brass, anechoic | the runs `<stem>.<pp\|mf\|ff>.<range>.aiff`: `Trumpet.novib`, `TenorTrombone`, `Horn`, `BassTrombone`, `Tuba` | `trumpet`, `tenor_trombone`, `horn`, `bass_trombone`, `tuba` |
 
+### Woodwinds
+
+The University of Iowa MIS B-flat clarinet, the same free use as the brass. `just fetch-iowa woodwinds`
+fetches the runs into `data/iowa-mis-woodwinds/` and `python3 analysis/split_brass.py clarinet` cuts them into
+one file per note under its `notes/` once.
+
+| Dataset | Files | Projects |
+|---|---|---|
+| University of Iowa MIS B-flat clarinet, anechoic | the runs `BbClar.<pp\|mf\|ff>.<range>.aiff` and the silence `BbClar.ambient.silence.aiff` | `clarinet` |
+
 ## Percussion
 
 The University of Iowa MIS percussion was recorded anechoic and "may be downloaded and used for

@@ -1,10 +1,14 @@
 //! One player (`Live` in `live.py`): the keys and controllers in, a control step of sound out. One note at a time, the
 //! last key wins. Every number carried over by name; a note's setup does not allocate.
+//! A reed plays the same player with the reed's own start, slur and release (`reed_start`, `reed_step`): the tongue holds
+//! the reed at the key while the breath rises behind it, then lets go with its push; a slur glides the fingering and
+//! moves the pressure to the new key's; key-up fades the breath; a key during the fade is tongued. The reed's frequency
+//! is its own: the bend and the tuning move the modes alone; no wobble of the air, no vibrato or scoop of the player's.
 
 use super::core::{Core, CoreParams, MAXM, ModeBank, OS, Ramp, SR};
 use super::shape::{DrawSource, Shape, level_of};
 use super::streams::{CTRL, Streams};
-use super::tables::{Modes, Note, Tables};
+use super::tables::{Modes, Note, Reed, Tables};
 use std::f64::consts::PI;
 use std::sync::Arc;
 
@@ -30,7 +34,65 @@ const DIP_T: f64 = 0.04;
 // the attack by dynamics (compare5.attack_for)
 const KICK: f64 = 0.5;
 const BURST: f64 = 5.0;
+/// the core's fingering change (`FADE`), s: a reed's opening and breath move to the new key's over it
+const FADE_S: f64 = 0.01;
+/// the air at which a reed's per-dynamics values (breath, push) were fitted (`reed_tables.X`)
+const REED_X: [f64; 3] = [0.2, 0.55, 0.9];
 
+/// A value per dynamics (pp, mf, ff) at the air x, between them as the pressures are; flat beyond pp and ff
+/// (`reed_tables.between`).
+fn between(v: &[f64; 3], x: f64) -> f64 {
+    if x <= REED_X[1] {
+        let w = (x.max(REED_X[0]) - REED_X[0]) / (REED_X[1] - REED_X[0]);
+        return v[0] + (v[1] - v[0]) * w;
+    }
+    if x <= REED_X[2] {
+        let w = (x - REED_X[1]) / (REED_X[2] - REED_X[1]);
+        return v[1] + (v[2] - v[1]) * w;
+    }
+    v[2]
+}
+
+/// A reed under pp's air (x 0.2): its pressure stays at pp's and its output fades by d / 0.2 instead, dB (−80 dB at no
+/// air; `quiet_db`). The pp sits just over the reed's threshold: a pressure scaled down with the air silenced it within a step.
+fn quiet_db(d: f64) -> f64 {
+    20.0 * (d / 0.2).min(1.0).max(1e-4).log10()
+}
+
+/// A reed's articulation (`Live.reed_start`, `reed_step`).
+#[derive(Clone, Copy, Debug)]
+struct ReedState {
+    /// the reed's settings
+    r: Reed,
+    /// control steps played
+    k: i64,
+    /// the step the tongue went on (none: off the reed)
+    tk0: Option<i64>,
+    /// the step of the last fingering change
+    ck0: i64,
+    /// the note it changes from, its opening and breath fading out over `FADE_S`: (mute, table place)
+    was: Option<(usize, usize)>,
+    /// the breath's share the tongued rise starts from
+    e0: f64,
+    /// a slur's pressures (log, per dynamics) it moves from over `glide_s`; the pressures of the last step
+    lp_from: Option<[f64; 3]>,
+    lp_now: Option<[f64; 3]>,
+    /// the opening's width and the tongue, at the step's start and end
+    wd: f64,
+    tg: f64,
+    wd_next: f64,
+    tg_next: f64,
+    /// the breath's share at the last step
+    env_now: f64,
+    /// the tongue's push where it lets go, m/s (started before the step's block)
+    seed_now: Option<f64>,
+}
+
+impl ReedState {
+    fn new(r: Reed, width: f64) -> ReedState {
+        ReedState { r, k: 0, tk0: None, ck0: 0, was: None, e0: 0.0, lp_from: None, lp_now: None, wd: width, tg: 0.0, wd_next: width, tg_next: 0.0, env_now: 0.0, seed_now: None }
+    }
+}
 /// The glide's mode (`Live.glide_mode`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum GlideMode {
@@ -150,6 +212,8 @@ pub struct Live {
     lip: f64,
     burst: f64,
     prev_ratio: Option<f64>,
+    /// the lip frequency the core played at the last control step
+    lip_hz: f64,
     pub pb: f64,
     pub vib_knob: f64,
     pub pedal: Option<f64>,
@@ -211,6 +275,10 @@ pub struct Live {
     noise_at: usize,
     /// per key the tuning re the fit, semitones (concert pitch, temperament)
     tune: Arc<[f64; 128]>,
+    /// the note sounding: its mute and table place
+    note_at: (usize, usize),
+    /// a reed's articulation (none: the lips)
+    reed: Option<ReedState>,
 }
 
 impl Live {
@@ -222,6 +290,7 @@ impl Live {
         let noise_at = offset.wrapping_mul(977) % streams.noise.len();
         let mut core = Core::new();
         core.set_noise_pos(noise_at);
+        let reed = tables.reed().map(|r| ReedState::new(*r, tables.width));
         Live {
             t_idx: offset % streams.wp.len(),
             tables,
@@ -249,9 +318,11 @@ impl Live {
             pending_off: false,
             rel_len: 0.0,
             pm: 0.0,
-            lip: 200.0,
-            burst: 1.0,
+            // a reed's at its own frequency, its breath none before a note
+            lip: reed.map_or(200.0, |r| r.r.hz),
+            burst: if reed.is_some() { 0.0 } else { 1.0 },
             prev_ratio: None,
+            lip_hz: 0.0,
             pb: 0.0,
             vib_knob: 0.0,
             pedal: None,
@@ -310,6 +381,8 @@ impl Live {
             burst_add: 0.0,
             noise_at,
             tune: Arc::new([0.0; 128]),
+            note_at: (0, 0),
+            reed,
         }
     }
 
@@ -433,6 +506,9 @@ impl Live {
         self.releasing = None;
         let dl = self.dyn_level(0.0) / 127.0;
         let dd = Self::near(dl);
+        // a reed sounding changes its fingering: the old bank glides into the new one
+        let (was, was_m) = if self.reed.is_some() && self.cur.is_some() { (Some(self.note_at), self.m_count) } else { (None, 0) };
+        self.note_at = (self.mute, self.place);
         let tables = self.tables.clone();
         let n = tables.note(self.mute, base);
         self.mu = tables.lip_mu(n.f);
@@ -451,8 +527,19 @@ impl Live {
             self.opened = 0.0;
         }
         self.h_x = dl.max(0.2);
-        let (hx, opened) = (self.h_x, self.opened);
-        self.core.change_filters(n.h[0].len(), n.r.clone(), |to| leaving(n, hx, opened, to));
+        if let (Some(r), Some(zh)) = (self.reed, &n.zh) {
+            // the flow through the note's own Z H; the last note's still on the flow over the fade
+            self.core.change_flow(zh.clone());
+            if let Some((wm, wp)) = was.filter(|_| was_m > 0) {
+                // the bank sounding (the last step's, its count the last note's)
+                self.bank.n = was_m;
+                let f_old = tables.note_at(wm, wp).f;
+                self.core.start_glide(&self.bank, f_old, n.f, r.r.pair_max, r.r.pair_tol);
+            }
+        } else {
+            let (hx, opened) = (self.h_x, self.opened);
+            self.core.change_filters(n.h[0].len(), n.r.clone(), |to| leaving(n, hx, opened, to));
+        }
         // where each dynamics' slide puts the note's mode: more air plays sharper, the player corrects by ear
         self.modes_c = [mode_cents(&n.modes[0], n.f), mode_cents(&n.modes[1], n.f), mode_cents(&n.modes[2], n.f)];
         self.mode_here = self.modes_c[dd];
@@ -460,6 +547,10 @@ impl Live {
         self.lip_from = prev_lip;
         self.down = slur && self.cur.is_some_and(|c| m < c);
         self.cur = Some(m);
+        if self.reed.is_some() {
+            self.reed_start(was, slur, dl);
+            return;
+        }
         let vel = v / 100.0;
         if slur {
             self.kick = SLUR_KICK * (0.6 + 0.4 * SLUR_HARD);
@@ -493,6 +584,96 @@ impl Live {
         self.gain = GAIN * 10f64.powf((tables.makeup_db[self.mute] + tables.gain_db) / 20.0);
         self.level_now = self.level_db(dl.max(0.2)); // a new note starts at its own level
         self.level_g = 10f64.powf(self.level_now / 20.0);
+    }
+
+    /// A reed's start at the key, after the fingering's: a slur moves the pressure from the last key's to this one's; a
+    /// tongued note (from rest, or on the last one's fade) puts the tongue on the reed, holds it while the breath rises
+    /// behind it and lets go (`reed_step`). `was`: the note sounding (none: nothing sounds).
+    fn reed_start(&mut self, was: Option<(usize, usize)>, slur: bool, dl: f64) {
+        let width = self.tables.note_at(self.note_at.0, self.note_at.1).width;
+        let Some(r) = self.reed.as_mut() else { return };
+        r.ck0 = r.k;
+        r.was = was;
+        if was.is_none() {
+            r.wd = width;
+        }
+        if slur {
+            r.lp_from = r.lp_now;
+            return;
+        }
+        r.lp_from = None;
+        // the tongue goes on at the key: on a sounding reed over the key's block (the core's ramp), from rest before it
+        if was.is_none() {
+            r.tg = 1.0;
+        }
+        r.tk0 = Some(r.k);
+        r.e0 = if was.is_some() { r.env_now } else { 0.0 };
+        self.gain = GAIN * 10f64.powf((self.tables.makeup_db[self.mute] + self.tables.gain_db) / 20.0);
+        if was.is_none() {
+            // from rest a tongued note starts at its own level; on a sounding note the level eases there
+            self.level_now = self.level_db(dl.max(0.2)) + quiet_db(dl);
+            self.level_g = 10f64.powf(self.level_now / 20.0);
+        }
+    }
+
+    /// The key's pressures (log, per dynamics), a slur's on their way from the last key's over `glide_s` from the key.
+    fn reed_lp(r: &mut ReedState, lp: [f64; 3]) -> [f64; 3] {
+        let mut lp = lp;
+        if let Some(from) = r.lp_from {
+            let g = (r.k - r.ck0) as f64 / (r.r.glide_s / DT);
+            if g >= 1.0 {
+                r.lp_from = None;
+            } else {
+                for i in 0..3 {
+                    lp[i] = from[i] + (lp[i] - from[i]) * g;
+                }
+            }
+        }
+        r.lp_now = Some(lp);
+        lp
+    }
+
+    /// The reed's controls at the end of this step, at the air x: (the breath's share of the key's pressure, the reed's
+    /// frequency, the noise's burst); the tongue and the opening's width for the core (`tg_next`, `wd_next`), and the
+    /// tongue's push where it lets go (`seed_now`, started at the modes' frequency before the block). The tongue: on the
+    /// reed from the key's block, held `tongue_hold` from the key, off over `tongue_let`; the breath rises (sin²) from e0
+    /// while it holds. A fingering change moves the width and the breath over `FADE_S`.
+    fn reed_step(&mut self, x: f64) -> (f64, f64, f64) {
+        let tables = self.tables.clone();
+        let n = tables.note_at(self.note_at.0, self.note_at.1);
+        let Some(r) = self.reed.as_mut() else { return (1.0, self.lip, 1.0) };
+        let mut env = 1.0;
+        r.tg_next = 0.0;
+        r.seed_now = None;
+        if let Some(tk0) = r.tk0 {
+            let j = (r.k - tk0) as f64;
+            let (hold, let_go) = (r.r.tongue_hold / DT, r.r.tongue_let / DT);
+            let tg = if j <= hold { 1.0 } else { (1.0 - (j - hold) / let_go).max(0.0) };
+            if j - 1.0 <= hold && hold < j {
+                r.seed_now = Some(between(&n.seed, x));
+            }
+            if j < hold {
+                env = r.e0 + (1.0 - r.e0) * (PI / 2.0 * j / hold).sin().powi(2);
+            }
+            if tg == 0.0 {
+                r.tk0 = None;
+            }
+            r.tg_next = tg;
+        }
+        let mut burst = between(&n.breath, x);
+        r.wd_next = n.width;
+        if let Some((wm, wp)) = r.was {
+            let g = (r.k - r.ck0) as f64 / (FADE_S / DT);
+            if g >= 1.0 {
+                r.was = None;
+            } else {
+                let w = tables.note_at(wm, wp);
+                let b0 = between(&w.breath, x);
+                burst = b0 + (burst - b0) * g;
+                r.wd_next = w.width + (n.width - w.width) * g;
+            }
+        }
+        (env, r.r.hz, burst)
     }
 
     fn level_db(&self, x: f64) -> f64 {
@@ -555,7 +736,7 @@ impl Live {
         }
         self.releasing = Some(0.0);
         let r: f64 = if self.tau > 0.8 { 60.0 } else { 40.0 };
-        self.rel_len = 0.02 + 0.6 * (r / 127.0).powi(2);
+        self.rel_len = self.reed.map_or(0.02 + 0.6 * (r / 127.0).powi(2), |rd| rd.r.release_s);
         self.last_air = self.air_now.unwrap_or(80.0);
         self.last_off = self.now;
     }
@@ -621,6 +802,12 @@ impl Live {
         self.t_idx = (self.t_idx + 1) % self.streams.wp.len();
         let i = self.t_idx;
         let (mut pm1, mut lip1, mut burst1, mut ratio) = (0.0, self.lip, 1.0, 1.0);
+        if let Some(r) = self.reed.as_mut() {
+            r.k += 1;
+            burst1 = self.burst;
+            r.wd_next = r.wd;
+            r.tg_next = r.tg;
+        }
         if self.cur.is_some() {
             let t = self.tau;
             let target = self.dyn_level(t);
@@ -654,13 +841,16 @@ impl Live {
                     self.gl = None;
                 }
             }
-            let (lp, ce, top, st) = match &self.at_now {
+            let (mut lp, ce, top, st) = match &self.at_now {
                 Some(m) => (m.lp, m.ce, m.top, m.st),
                 None => {
                     let a = self.tables.at(self.place);
                     (a.lp, a.ce, a.top, self.settings)
                 }
             };
+            if let Some(r) = self.reed.as_mut() {
+                lp = Self::reed_lp(r, lp);
+            }
             let x = d.max(0.2);
             let (l, c);
             if x <= 0.55 {
@@ -686,8 +876,14 @@ impl Live {
                 dc = st[1].0 + (st[2].0 - st[1].0) * g;
                 air = st[1].1 + (st[2].1 - st[1].1) * g;
             }
-            let mut p = l.exp() * air * (d / 0.2).min(1.0);
-            self.level_to = self.level_db(x);
+            let mut p = l.exp() * air;
+            if self.reed.is_some() {
+                // under pp's air the pressure stays at pp's, the output fades (`quiet_db`)
+                self.level_to = self.level_db(x) + quiet_db(d);
+            } else {
+                p *= (d / 0.2).min(1.0);
+                self.level_to = self.level_db(x);
+            }
             let tables = self.tables.clone();
             let n = tables.note(self.mute, self.base);
             if n.open.is_some() {
@@ -702,7 +898,8 @@ impl Live {
                 self.opened += (want - self.opened) * 0.08;
                 self.h_x = -1.0;
             }
-            if (x - self.h_x).abs() > 0.004 {
+            if self.reed.is_none() && (x - self.h_x).abs() > 0.004 {
+                // a reed's filter is the same at every air
                 self.h_x = if n.open.is_none() { x } else { -1.0 };
                 leaving(n, x, self.opened, self.core.h_mut());
             }
@@ -712,7 +909,9 @@ impl Live {
             // the attack or the slur
             let mut env;
             let mut lip;
-            if self.slur {
+            if self.reed.is_some() {
+                (env, lip, burst1) = self.reed_step(x);
+            } else if self.slur {
                 let g = (t / 0.025).min(1.0);
                 lip = self.lip_from + (target_lip - self.lip_from) * g;
                 lip *= 2f64.powf(-(if self.down { SLACK_DOWN } else { SLACK_UP }) * (-t / SLACK_T).exp() / 1200.0);
@@ -729,6 +928,10 @@ impl Live {
                 *r += DT;
                 env *= (1.0 - *r / self.rel_len).max(0.0);
             }
+            if let Some(r) = self.reed.as_mut() {
+                r.env_now = env;
+            }
+            let reed = self.reed.is_some();
             // vibrato
             let mut semis = self.warp + 2.0 * self.pb - TUNE_FOLLOW * tune_c / 100.0 + self.tune[usize::from(self.key.min(127))];
             let (depth, rate_cc) = if self.vib_knob > 0.0 {
@@ -740,14 +943,18 @@ impl Live {
             };
             self.vib_phase += 2.0 * PI * (3.5 + 4.5 * rate_cc / 127.0) * DT;
             let wob = self.vib_phase.sin();
-            lip *= 1.0 + 0.012 * depth * wob;
+            if !reed {
+                // the reed keeps its own frequency
+                lip *= 1.0 + 0.012 * depth * wob;
+            }
             semis += 0.35 * depth * wob;
             p *= 1.0 + 0.10 * depth * wob;
             if self.virtual_player {
                 semis += self.shape.bend_cents(t) / 100.0;
             }
+            // growl and flutter: the lips' alone; a reed ignores both (its controls, the aftertouch, the player)
             // growl
-            let gr = self.growl.max(self.at_growl);
+            let gr = if reed { 0.0 } else { self.growl.max(self.at_growl) };
             if gr > 0.0 {
                 let b = self.streams.band[i];
                 p *= (1.0 + GROWL * gr * b).max(0.3);
@@ -756,7 +963,7 @@ impl Live {
                 }
             }
             // flutter
-            let fl = self.flutter.max(self.at_flutter);
+            let fl = if reed { 0.0 } else { self.flutter.max(self.at_flutter) };
             if fl > 0.0 {
                 self.fl_phase += 2.0 * PI * 25.0 * (1.0 + 0.1 * self.streams.jit[i]) * DT;
                 let c1 = 0.5 + 0.5 * self.fl_phase.cos();
@@ -766,8 +973,13 @@ impl Live {
                 burst1 += 6.0 * fl * shut;
                 semis -= 0.1 * f2;
             }
-            p *= env * (1.0 + self.streams.wp[i]);
-            lip *= 1.0 + self.streams.wl[i];
+            if reed {
+                // no wobble: the reed's steady sound is the accepted one's
+                p *= env;
+            } else {
+                p *= env * (1.0 + self.streams.wp[i]);
+                lip *= 1.0 + self.streams.wl[i];
+            }
             pm1 = p;
             lip1 = lip;
             ratio = 2f64.powf(semis / 12.0);
@@ -778,7 +990,8 @@ impl Live {
         }
         // eased: the air's and the key's changes must not click
         let g0 = self.level_g;
-        if self.tables.has_level {
+        let leveled = self.tables.has_level || self.reed.is_some();
+        if leveled {
             self.level_now += (self.level_to - self.level_now) * 0.1;
             self.level_g = 10f64.powf(self.level_now / 20.0);
         }
@@ -795,20 +1008,50 @@ impl Live {
             self.bank.rr[j] = self.rt_re[j] * ratio;
             self.bank.ri[j] = self.rt_im[j] * ratio;
         }
-        let ramp = Ramp { pm: (self.pm, pm1), lip: (self.prev_ratio.map_or(self.lip, |r| self.lip * r), lip1 * ratio), burst: (self.burst, burst1) };
         let tables = self.tables.clone();
+        let ramp = match self.reed.as_mut() {
+            // the reed at its own frequency, its opening and tongue; only the modes take the bend
+            Some(r) => {
+                if let Some(a) = r.seed_now.take() {
+                    // the push at the note the modes play
+                    self.core.start_seed(a, tables.note_at(self.note_at.0, self.note_at.1).f * ratio, r.r.seed_s);
+                }
+                Ramp { pm: (self.pm, pm1), lip: (self.lip, lip1), burst: (self.burst, burst1), width: (r.wd, r.wd_next), tongue: (r.tg, r.tg_next) }
+            }
+            None => Ramp { pm: (self.pm, pm1), lip: (self.prev_ratio.map_or(self.lip, |r| self.lip * r), lip1 * ratio), burst: (self.burst, burst1), width: (self.params.width, self.params.width), tongue: (0.0, 0.0) },
+        };
+        self.lip_hz = ramp.lip.1;
         self.core.process(&ramp, self.kick, self.mu, &self.bank, &tables.lips, &self.params, &self.streams.noise, &tables.dec, out);
+        if let Some(r) = self.reed.as_mut() {
+            r.wd = r.wd_next;
+            r.tg = r.tg_next;
+        }
         self.kick = 0.0;
         self.pm = pm1;
         self.lip = lip1;
         self.burst = burst1;
         self.prev_ratio = Some(ratio);
-        if self.tables.has_level {
+        if leveled {
             let dg = (self.level_g - g0) / CTRL as f64;
             for (k, x) in out.iter_mut().enumerate() {
                 *x *= g0 + dg * k as f64;
             }
         }
+    }
+
+    /// The lips' (or the reed's) frequency handed to the core at the last control step, Hz.
+    pub fn lip_hz(&self) -> f64 {
+        self.lip_hz
+    }
+
+    /// The output's level gain at the end of the last control step (the key's level at its air, eased).
+    pub fn level_gain(&self) -> f64 {
+        self.level_g
+    }
+
+    /// Its modes gliding from the last note's (a reed's fingering change).
+    pub fn gliding(&self) -> bool {
+        self.core.gliding()
     }
 
     /// The state not a number (the test of what follows it).
@@ -827,17 +1070,27 @@ impl Live {
         self.m_count = 0;
         self.level = None;
         self.pm = 0.0;
-        self.lip = 200.0;
-        self.burst = 1.0;
+        self.lip = self.reed.map_or(200.0, |r| r.r.hz);
+        self.burst = if self.reed.is_some() { 0.0 } else { 1.0 };
         self.prev_ratio = None;
         self.smooth_air = None;
+        if let Some(r) = self.reed.as_mut() {
+            *r = ReedState::new(r.r, self.tables.width);
+        }
         self.reset();
     }
 
-    /// The model blew up: the state starts again, rather than the speakers.
+    /// The model blew up: the state starts again, rather than the speakers. A reed's output comes back on the note's
+    /// own filter once a note has sounded (live.py's `reset`).
     pub fn reset(&mut self) {
         self.core.reset();
         self.core.set_noise_pos(self.noise_at);
+        if self.reed.is_some()
+            && self.m_count > 0
+            && let Some(zh) = &self.tables.note_at(self.note_at.0, self.note_at.1).zh
+        {
+            self.core.change_flow(zh.clone());
+        }
     }
 }
 

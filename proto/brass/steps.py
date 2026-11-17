@@ -29,17 +29,58 @@ def run(module, *args, plain=False, capture=False):
 
 def mutes():
     """What goes in the bell (the plunger is an output filter on the open note: nothing to tune or repair)."""
-    return [m for m in P.section(NAME, "brass")["mutes"] if m != "plunger"]
+    return [m for m in P.section(NAME, "brass").get("mutes", []) if m != "plunger"]
 
 
 def every():
-    return ["open", *P.section(NAME, "brass")["mutes"]]
+    """The bell open and each mute (a reed has none)."""
+    return ["open", *P.section(NAME, "brass").get("mutes", [])]
 
 
 # what the steps after the fit write: the live player, the tables and the mutes read them, so a step read the last
 # build's level, speak, residual and mutes' correction where this one's had not been written yet (two builds in a row
 # differed in every one of them); the mutes' shapes and their correction go in their own step, a lender's
 LATER = ("tuning", "cells", "speak", "residual", "cells_mutes", "tuning_mutes", "level", "gain_db")
+
+
+def reed_keys():
+    """The keys a smoke run limits the reed's fits to (REED_KEYS="60 62"); none: every key."""
+    return os.environ.get("REED_KEYS", "").split()
+
+
+def reed_pressures():
+    """The reed's air per key and dynamics against the recordings' brightness (reed_fit.py)."""
+    run("reed_fit", "pressures", *reed_keys())
+
+
+def reed_tune():
+    """The barrel per key, from the mf note's pitch."""
+    run("reed_fit", "tune", *reed_keys())
+
+
+def reed_starts():
+    """The tongue's push per key and dynamics: the note from the key rises as fast as its recording."""
+    run("reed_fit", "starts", *reed_keys())
+
+
+def reed_radiation():
+    """The radiation's correction per fingering above 2 kHz, from the harmonics' peaks at mf."""
+    run("reed_fit", "radiation", *reed_keys())
+
+
+def reed_breath():
+    """The breath's level, shape and per-key corrections, from the floor between the recordings' harmonics."""
+    run("reed_fit", "breath", *reed_keys())
+
+
+def reed_levels():
+    """The output's level per key and dynamics, on lines through the recordings' A-weighted levels."""
+    run("reed_fit", "levels", *reed_keys())
+
+
+def reed_report():
+    """The spec's accepted-state numbers on the live player: the phrase, the bands at mf, the dynamics, the starts."""
+    run("reed_report")
 
 
 def brass_fit():

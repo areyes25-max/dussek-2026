@@ -182,3 +182,57 @@ fn a_measuring_engine_writes_little_memory() {
     // blocks then as beside a plain morph build (2026-10-23: p99 2.9 ms, none over 5.3)
     assert!(n < 24_000_000, "a measuring engine allocated {:.1} MB", n as f64 / 1e6);
 }
+
+#[test]
+fn the_reed_allocates_nothing() {
+    // the clarinet: a line tongued and slurred over the register change, a key in the release's fade, a key lifted in
+    // the tongue's hold, six keys and a seventh (a steal), the bend, growl and flutter, the sound off, another engine
+    // taking over
+    let Some(mut e) = common::engine(&dir("clarinet"), SR, Tuning::default()) else { return };
+    let mut next = common::engine(&dir("clarinet"), SR, Tuning { mic: dussek::mic::MicPosition::Audience, ..Tuning::default() }).unwrap();
+    play(&mut e, 2);
+    let n = counted(|| {
+        let down = |e: &mut Engine, key: u8| {
+            let (t, speed) = (e.now(), e.hammer_speed(key, 90.0));
+            e.queue(t, Event::NoteOn { key, speed });
+        };
+        let up = |e: &mut Engine, key: u8| e.queue(e.now(), Event::KeyUp { key });
+        for (a, b) in [(60u8, 62u8), (67, 70), (70, 65)] {
+            down(&mut e, a);
+            play(&mut e, 12);
+            down(&mut e, b);
+            play(&mut e, 2);
+            up(&mut e, a);
+            play(&mut e, 12);
+            up(&mut e, b);
+            play(&mut e, 3);
+        }
+        down(&mut e, 64);
+        play(&mut e, 1);
+        up(&mut e, 64);
+        play(&mut e, 6);
+        for k in [55u8, 59, 62, 66, 69, 74] {
+            down(&mut e, k);
+        }
+        play(&mut e, 12);
+        down(&mut e, 77);
+        e.queue(e.now() + 300, Event::PitchBend { value: 1.0 });
+        e.queue(e.now() + 500, Event::ChannelPressure { value: 0.8 });
+        let mut p = e.params();
+        p.brass.growl = 0.4;
+        p.brass.flutter = 0.4;
+        e.set_params(p);
+        play(&mut e, 12);
+        for k in [55u8, 59, 62, 66, 69, 74, 77] {
+            up(&mut e, k);
+        }
+        play(&mut e, 4);
+        down(&mut e, 66);
+        play(&mut e, 12);
+        assert!(next.adopt(&mut e), "one instrument takes over");
+        play(&mut next, 8);
+        next.silence();
+        play(&mut next, 8);
+    });
+    assert_eq!(n, 0, "the audio thread allocated {n} times");
+}

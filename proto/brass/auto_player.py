@@ -6,12 +6,14 @@ play. It knows only what has happened: never a note's length or the next note be
 over 291 notes: velocity hardly says how much air (r 0.17), higher notes get more (r 0.39); a slur
 glides between levels; a tongued note has a small accent (+4 of 127, gone in 150 ms); vibrato on 41
 of 55 long notes, by about 0.2 s, to about 98 of 127, about 5 Hz; a long note swells 3 and sags 5 over 2 s.
-What the player does send (expression pedal, mod wheel, pitch wheel) wins over the shapes."""
+What the player does send (expression pedal, mod wheel, pitch wheel) wins over the shapes. A reed (exciter "reed")
+plays without the vibrato and the scoop: a clarinet's tone is held straight (its draws stay, so the rest stays)."""
 import math
 import numpy as np
 import midi_play, spec
 
 STEP = 0.005  # s, the grid of the curves it writes
+REED = spec.S.get("exciter") == "reed"
 
 
 def causal_rng(seed, i):
@@ -19,10 +21,15 @@ def causal_rng(seed, i):
 
 
 def level_of(v, m):
-    """Air for a key: how hard it was struck, and higher notes a little more."""
+    """Air for a key: how hard it was struck, and higher notes a little more. A reed's air is the velocity's alone: its
+    pressures are fitted per key, so they carry what the higher notes' more stands in for."""
     if "vel_air" in spec.S:  # the whole of the dynamics from the keys; the higher notes' more goes to nothing at the top, so the top stays one velocity's
         b = float(np.interp(v, *spec.S["vel_air"]))
+        if REED:
+            return b
         return b + np.clip(m - spec.S["center"], -12, 12) * (1 - b / 127.0)
+    if REED:
+        return 45.0 + 75.0 * v / 127.0
     return 45.0 + 75.0 * v / 127.0 + 1.0 * np.clip(m - spec.S["center"], -12, 12)
 
 
@@ -53,13 +60,15 @@ class Shape:
         return max(1.0, min(127.0, b))
 
     def vibrato(self, t):
+        if REED:
+            return 0.0
         return self.depth * max(0.0, min(1.0, (t - self.on) / 0.8))
 
     def vibrato_rate(self, t):
         return self.rate0 + 5 * min(1.0, t / 2)
 
     def bend_cents(self, t):
-        return self.off + (-60 * math.exp(-t / 0.035) if self.scoops else 0.0)
+        return self.off + (-60 * math.exp(-t / 0.035) if self.scoops and not REED else 0.0)
 
 
 def perform(notes, seed=1, cc=None, pb=None, shapes=True):

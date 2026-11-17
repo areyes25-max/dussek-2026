@@ -125,3 +125,23 @@ def test_the_projects_keep_the_spec_s_mutes():
             "bass_trombone": ["straight", "cup", "bucket", "plunger"], "tuba": ["straight"]}
     for name, mutes in want.items():
         assert P.config(name)["brass"]["mutes"] == mutes, name
+
+
+def test_split_reads_each_project_s_root(tmp_path, monkeypatch):
+    """A project whose main source's root is another folder under data/ splits from that folder."""
+    y, sr = chromatic_run([60, 61, 63])
+    root = tmp_path / "data" / "elsewhere"
+    root.mkdir(parents=True)
+    sf.write(root / "X.ff.C4Eb4.aiff", y, sr, subtype="PCM_24")
+    cfg = {"brass": {"stem": "X", "hp": 30.0},
+           "part": [{"id": "x", "source": [{"id": "x_src", "role": "main", "root": "elsewhere"}]}]}
+    monkeypatch.setattr(split_brass.P, "config", lambda name: cfg)
+    monkeypatch.setattr(split_brass.P, "REPO", str(tmp_path))
+    split_brass.main(["x"])
+    assert (root / "notes" / "X" / "ff" / "61.wav").exists()
+
+
+def test_the_reed_project_plays_its_fitted_range():
+    b = P.section("clarinet", "brass")
+    assert (b["low"], b["high"], b["exciter"]) == (50, 82, "reed")
+    assert P.config("clarinet")["project"]["family"] == "reed"

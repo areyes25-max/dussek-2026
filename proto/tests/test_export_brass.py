@@ -99,3 +99,65 @@ def test_a_pose_is_checked():
                 {"azimuth": 60, "elevation": 95, "ears": [0, 0, 0]}, {"azimuth": 0, "elevation": 0, "ears": [0, 0, 0], "x": 1}):
         with pytest.raises(ValueError):
             m.pose(bad)
+
+
+REED_FIELDS = ("exciter", "reed_hz", "reed_q", "reed_k", "tongue_hold", "tongue_let", "seed_s", "glide_s", "release_s",
+               "pair_max", "pair_tol", "noise_band", "noise_lp")
+REED_NOTE_FIELDS = ("width", "breath", "seed", "zh")
+
+
+@pytest.fixture(scope="module")
+def reed_export(tmp_path_factory):
+    name = "clarinet"
+    if not os.path.exists(os.path.join(P.project_dir(name), "cache", P.main_part(name), "tables_open.pkl")):
+        pytest.skip("the reed's tables are not here")
+    out = str(tmp_path_factory.mktemp("export") / name)
+    subprocess.run([sys.executable, SCRIPT, "--project", name, "--out", out], check=True, capture_output=True, text=True)
+    return name, out
+
+
+def test_a_reed_export_carries_its_reed(reed_export):
+    """The reed's fields as the project sets them; its lips one mode closing with the pressure (sign -1); every note
+    its opening's width, its breath and its push per dynamics, and its flow-to-air filter in place of h and r; one
+    bell, open."""
+    name, out = reed_export
+    doc = json.load(open(os.path.join(out, "instrument.json")))
+    b, S = doc["brass"], P.config(name)["brass"]
+    assert b["exciter"] == "reed"
+    for k in REED_FIELDS[1:]:
+        assert b[k] == S[k], k
+    assert b["lips"] == {"ratio": [1.0], "q": [S["reed_q"]], "sign": [-1.0], "comp": [1.0]}
+    assert b["order"] == ["open"] and list(b["mutes"]) == ["open"] and b["makeup_db"] == {"open": 0.0}
+    assert b["mu"] == pytest.approx(S["reed_k"] / (2 * np.pi * S["reed_hz"]) ** 2, rel=1e-12)
+    assert b["mu_p"] == 0.0 and b["nl"] == 0.0 and b["slide"] is False and b["width"] == S["width_high"]
+    assert b["y0"] == S["y0"] and b["soft"] == S["soft"]
+    assert b["speak"] == {} and b["cells"] == {}
+    assert b["table"] == list(range(S["low"], S["high"] + 1)) == [int(k) for k in b["mutes"]["open"]["notes"]]
+    assert b["range"] == [S["low"], S["high"]]
+    assert all(str(m) in b["level"]["open"] for m in b["table"])  # every key its level
+    for key, n in b["mutes"]["open"]["notes"].items():
+        assert n["width"] in (S["width_low"], S["width_high"]), key
+        assert n["zh"]["n"] == 4096 and n["zh"]["t"] == "f32" and "h" not in n and "r" not in n, key  # its flow's own Z H
+        for f in ("breath", "seed"):
+            assert sorted(n[f]) == ["ff", "mf", "pp"] and all(v > 0 for v in n[f].values()), (key, f)
+    assert b["mutes"]["open"]["notes"][str(S["low"])]["width"] == S["width_low"]
+    assert b["mutes"]["open"]["notes"][str(S["high"])]["width"] == S["width_high"]
+    assert len(b["noise"]) == 5  # the breath's shape at live.NOISE_HZ, the fit's
+    assert os.path.getsize(os.path.join(out, "data.bin")) < 4e6  # a brass export's size, not the trumpet's mutes
+    names = os.listdir(out)
+    assert "LICENSE.md" in names
+    assert not [n for n in names if n.lower().endswith((".wav", ".aif", ".aiff", ".flac", ".mp3", ".ogg"))]
+
+
+def test_a_lip_export_has_no_reed_fields(horn):
+    """A brass export as before: no reed field, no note's width, breath or push (the engine reads lips by default); the
+    committed five too."""
+    docs = [json.load(open(os.path.join(horn, "instrument.json")))]
+    docs += [json.load(open(os.path.join(P.REPO, "instruments", n, "instrument.json")))
+             for n in ("trumpet", "tenor_trombone", "horn", "bass_trombone", "tuba")]
+    for doc in docs:
+        b = doc["brass"]
+        assert not set(REED_FIELDS) & set(b), doc["profile"]
+        for mute in b["mutes"].values():
+            for n in mute["notes"].values():
+                assert not set(REED_NOTE_FIELDS) & set(n), doc["profile"]

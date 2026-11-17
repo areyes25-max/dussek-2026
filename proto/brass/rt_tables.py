@@ -1,15 +1,17 @@
 """What the live engine needs per mute and note, built once and cached (out/rt_<mute>.pkl): the modes per
 dynamics and the two filters (the bell with the microphone's correction; the impedance the modes
-leave out). rt_tables.py [mute ...] builds them; live.py does so when they are missing or stale."""
+leave out). rt_tables.py [mute ...] builds them; live.py does so when they are missing or stale. A reed's
+(exciter "reed") come from reed_tables.py, in the same shape, open only."""
 import multiprocessing, os, pickle, sys
 import numpy as np
 from concurrent.futures import ProcessPoolExecutor
-import bore, sim, spec, muted, mutes, compare5, phrase3, fit4
+import bore, sim, spec, muted, mutes, compare5, phrase3, fit4, reed_tables
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 T5 = compare5.T5
 RESIDUAL = spec.load("residual", {})
-TABLE = sorted(int(m) for m in T5["table"])
+REED = spec.S.get("exciter") == "reed"
+TABLE = reed_tables.table() if REED else sorted(int(m) for m in T5["table"])
 NFFT = 8192
 HLEN, RLEN = 2048, 512
 CUP_HZ = (2000.0, 3500.0)
@@ -26,6 +28,8 @@ def plain():
 
 def memo_key(mute):
     """What a mute's tables are made of: a table's memo is good while this stays the same."""
+    if REED:
+        return reed_tables.memo_key()
     values = [{k: v for k, v in spec.S.items() if k != "gain_db"}, plain(), T5, spec.load("tuning"), spec.load("leveled"),
               None if plain() else spec.load("residual")]
     if mute != "open":
@@ -132,13 +136,17 @@ def levels_at():
 
 
 def build(mute):
-    muted.know_splits([mute])
-    with ProcessPoolExecutor(8, mp_context=multiprocessing.get_context("fork")) as ex:
-        notes = dict(ex.map(build_note, [(m, mute) for m in TABLE]))
+    if REED:
+        notes, at = reed_tables.build()
+    else:
+        muted.know_splits([mute])
+        with ProcessPoolExecutor(8, mp_context=multiprocessing.get_context("fork")) as ex:
+            notes = dict(ex.map(build_note, [(m, mute) for m in TABLE]))
+        at = levels_at()
     path = spec.tables_path(f"tables_{mute}{plain()}", writing=True)
     tmp = path + f".{os.getpid()}"
     with open(tmp, "wb") as f:
-        pickle.dump({"notes": notes, "at": levels_at(), "key": memo_key(mute)}, f)
+        pickle.dump({"notes": notes, "at": at, "key": memo_key(mute)}, f)
     os.replace(tmp, path)
 
 
@@ -163,5 +171,5 @@ def load(mute):
 
 
 if __name__ == "__main__":
-    for m in sys.argv[1:] or list(mutes.MUTES):
+    for m in sys.argv[1:] or (["open"] if REED else list(mutes.MUTES)):
         load(m)

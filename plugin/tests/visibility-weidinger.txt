@@ -78,6 +78,86 @@ bass_trombone visible mic=5 prep=2 volume dynamics variation mic_position mic_l_
 bass_trombone visible mic=5 prep=3 volume dynamics variation mic_position mic_l_x mic_l_y mic_l_z mic_r_x mic_r_y mic_r_z mic_l_pattern mic_l_yaw mic_l_pitch mic_r_pattern mic_r_yaw mic_r_pitch distance_level room concert_pitch temperament temperament_key brass_mute growl flutter brass_vibrato air air_set virtual_player brass_solo glide_mode glide_hold glide_time aftertouch_to air_added
 bass_trombone visible mic=5 prep=4 volume dynamics variation mic_position mic_l_x mic_l_y mic_l_z mic_r_x mic_r_y mic_r_z mic_l_pattern mic_l_yaw mic_l_pitch mic_r_pattern mic_r_yaw mic_r_pitch distance_level room concert_pitch temperament temperament_key brass_mute growl flutter brass_vibrato air air_set virtual_player brass_solo glide_mode glide_hold glide_time aftertouch_to air_added
 bass_trombone visible mic=5 prep=5 volume dynamics variation mic_position mic_l_x mic_l_y mic_l_z mic_r_x mic_r_y mic_r_z mic_l_pattern mic_l_yaw mic_l_pitch mic_r_pattern mic_r_yaw mic_r_pitch distance_level room concert_pitch temperament temperament_key brass_mute growl flutter brass_vibrato air air_set virtual_player brass_solo glide_mode glide_hold glide_time aftertouch_to air_added
+clarinet body 18
+clarinet label aftertouch_to Aftertouch to|What pressing on a held key does.
+clarinet label air Air|How hard the air blows. Moving it (or its controller) takes over from the keys.
+clarinet label air_added Air added|Air on top of what the keys or the Air knob give, up to the top at 100 %. The mod wheel (CC 1) plays it.
+clarinet label air_set Air by hand|On: the Air knob sets the air. Off: the air comes from how hard the keys are struck.
+clarinet label brass_mute Mute|What goes in the bell. Takes effect from the next tongued note: the notes sounding and a slur keep theirs.
+clarinet label brass_solo Solo|Off (Auto): a line is one player, a chord a section of up to six. On: one player, the last key wins.
+clarinet label brass_vibrato Vibrato|Above 0 it replaces the virtual player's vibrato: the depth, at a fixed rate.
+clarinet label concert_pitch Concert pitch|The pitch of A4. The instrument is rebuilt in the background; the sounding notes take the new tuning.
+clarinet label distance_level Distance level|Total: the level stays the same as you move away (far positions change little, the room dominates). Direct sound: the direct sound stays the same and the room grows with the distance; for an external reverb, set Room to Off.
+clarinet label dynamics Dynamics|How the velocity maps to the air: less brings the soft notes up, with more air, so also brighter; more takes them down. 45 dB plays the velocity as it comes.
+clarinet label flutter Flutter|The tongue rolling: the air cut about 25 times a second.
+clarinet label glide_hold Glide held|On while held: every slur within a tritone goes by the slide (a pedal, or a knob past its middle).
+clarinet label glide_mode Glide|A slur on the slide. Auto: a soft key after a long note, close by, the way a player would. On: every slur within a tritone. Off: never.
+clarinet label glide_time Glide time|How long the slide takes over a minor third.
+clarinet label growl Growl|The throat's rough edge on the air: more breath and a rattle in the tone.
+clarinet label mic_distance Mic distance|0 = the position's default. Far positions (Audience) are mostly room: the distance changes little there.
+clarinet label mic_l_pattern Left mic pattern|0 omni, 50 cardioid, 75 hypercardioid, 100 figure-8. A pattern hears what it points at; omni ignores the aim.
+clarinet label mic_l_pitch Left mic tilt|Up or down from level, in degrees (positive: up). Omni ignores the aim.
+clarinet label mic_l_x Left mic x|From the bell's mouth: x to the player's right (+) or left (-), y to the player's front (+) or back (-), z up. Dragging a microphone in the drawing sets these.
+clarinet label mic_l_y Left mic y|Left microphone, y: to the player's front (+) or back (-) of the bell's mouth.
+clarinet label mic_l_yaw Left mic aim|Direction in the floor plane: 0 the way the player faces, positive towards the player's right.
+clarinet label mic_l_z Left mic z|Left microphone, z: the height above the bell's mouth.
+clarinet label mic_position Mic position|Where the two microphones stand: Recording (the recording's own sound, 1.5 m on the bell's axis), Player (at the player's ears), Audience (the default: 6 m in front, at the player's height), Close 1 (30 cm on the bell's axis), Close 2 (30 cm from the bell, well off its axis) or Custom (both placed freely). Click a marker in the drawing to choose one.
+clarinet label mic_r_pattern Right mic pattern|As for the left microphone.
+clarinet label mic_r_pitch Right mic tilt|As for the left microphone.
+clarinet label mic_r_x Right mic x|Right microphone, x: to the player's right (+) or left (-) of the bell's mouth. Dragging a microphone in the drawing sets x, y and z.
+clarinet label mic_r_y Right mic y|Right microphone, y: to the player's front (+) or back (-) of the bell's mouth.
+clarinet label mic_r_yaw Right mic aim|As for the left microphone.
+clarinet label mic_r_z Right mic z|Right microphone, z: the height above the bell's mouth.
+clarinet label mic_spacing Mic spacing|How far apart the two microphones stand, across the line of sight: 0 is mono, more widens the stereo image. Dragging the pair in the drawing sets it.
+clarinet label plunger Plunger|The hand over the plunger, 0 % shut, 100 % open. Moving it (or its controller) takes over from the virtual player's hand.
+clarinet label plunger_set Plunger by hand|On: the Plunger knob sets the hand. Off: the virtual player's hand follows how hard the key was struck, without a player half open.
+clarinet label room Room|The recording room's reverberation against the instrument's own sound. The left end is off: the dry instrument, for an external reverb.
+clarinet label temperament Temperament|Equal (every key alike) or a historical temperament: keys near the temperament key sound purer, far ones more colorful. As recorded: each recorded key at its own pitch, as the instrument was tuned in the recordings. Scala file: a scale from a .scl file, any number of notes (a .kbm key map of the same name beside it lays it on the keys). A stays at the concert pitch.
+clarinet label temperament_key Temperament key|The key a historical temperament or a Scala file's scale is centered on (its "C"). No effect with Equal temperament, As recorded or a Scala file with its own key map.
+clarinet label variation Player's variation|How much each note differs from the last in the virtual player's hands: its air, vibrato and intonation. 100 % as it was fitted, 0 every note alike. From the next note.
+clarinet label virtual_player Virtual player|On: the air's shape, vibrato and intonation made from the keys alone. Off, for wind controllers and DAWs: the air from velocity, nothing else.
+clarinet label volume Volume|The output level, after everything else. The left end is off.
+clarinet mallets 
+clarinet pedals
+clarinet preps
+clarinet recorded 50 82
+clarinet tabs Sound Touch Mics Tuning MIDI About Player
+clarinet visible mic=0 prep=0 volume dynamics variation mic_position distance_level room concert_pitch temperament temperament_key brass_vibrato air air_set virtual_player brass_solo air_added
+clarinet visible mic=0 prep=1 volume dynamics variation mic_position distance_level room concert_pitch temperament temperament_key brass_vibrato air air_set virtual_player brass_solo air_added
+clarinet visible mic=0 prep=2 volume dynamics variation mic_position distance_level room concert_pitch temperament temperament_key brass_vibrato air air_set virtual_player brass_solo air_added
+clarinet visible mic=0 prep=3 volume dynamics variation mic_position distance_level room concert_pitch temperament temperament_key brass_vibrato air air_set virtual_player brass_solo air_added
+clarinet visible mic=0 prep=4 volume dynamics variation mic_position distance_level room concert_pitch temperament temperament_key brass_vibrato air air_set virtual_player brass_solo air_added
+clarinet visible mic=0 prep=5 volume dynamics variation mic_position distance_level room concert_pitch temperament temperament_key brass_vibrato air air_set virtual_player brass_solo air_added
+clarinet visible mic=1 prep=0 volume dynamics variation mic_position mic_distance mic_spacing distance_level room concert_pitch temperament temperament_key brass_vibrato air air_set virtual_player brass_solo air_added
+clarinet visible mic=1 prep=1 volume dynamics variation mic_position mic_distance mic_spacing distance_level room concert_pitch temperament temperament_key brass_vibrato air air_set virtual_player brass_solo air_added
+clarinet visible mic=1 prep=2 volume dynamics variation mic_position mic_distance mic_spacing distance_level room concert_pitch temperament temperament_key brass_vibrato air air_set virtual_player brass_solo air_added
+clarinet visible mic=1 prep=3 volume dynamics variation mic_position mic_distance mic_spacing distance_level room concert_pitch temperament temperament_key brass_vibrato air air_set virtual_player brass_solo air_added
+clarinet visible mic=1 prep=4 volume dynamics variation mic_position mic_distance mic_spacing distance_level room concert_pitch temperament temperament_key brass_vibrato air air_set virtual_player brass_solo air_added
+clarinet visible mic=1 prep=5 volume dynamics variation mic_position mic_distance mic_spacing distance_level room concert_pitch temperament temperament_key brass_vibrato air air_set virtual_player brass_solo air_added
+clarinet visible mic=2 prep=0 volume dynamics variation mic_position mic_distance mic_spacing distance_level room concert_pitch temperament temperament_key brass_vibrato air air_set virtual_player brass_solo air_added
+clarinet visible mic=2 prep=1 volume dynamics variation mic_position mic_distance mic_spacing distance_level room concert_pitch temperament temperament_key brass_vibrato air air_set virtual_player brass_solo air_added
+clarinet visible mic=2 prep=2 volume dynamics variation mic_position mic_distance mic_spacing distance_level room concert_pitch temperament temperament_key brass_vibrato air air_set virtual_player brass_solo air_added
+clarinet visible mic=2 prep=3 volume dynamics variation mic_position mic_distance mic_spacing distance_level room concert_pitch temperament temperament_key brass_vibrato air air_set virtual_player brass_solo air_added
+clarinet visible mic=2 prep=4 volume dynamics variation mic_position mic_distance mic_spacing distance_level room concert_pitch temperament temperament_key brass_vibrato air air_set virtual_player brass_solo air_added
+clarinet visible mic=2 prep=5 volume dynamics variation mic_position mic_distance mic_spacing distance_level room concert_pitch temperament temperament_key brass_vibrato air air_set virtual_player brass_solo air_added
+clarinet visible mic=3 prep=0 volume dynamics variation mic_position mic_distance mic_spacing distance_level room concert_pitch temperament temperament_key brass_vibrato air air_set virtual_player brass_solo air_added
+clarinet visible mic=3 prep=1 volume dynamics variation mic_position mic_distance mic_spacing distance_level room concert_pitch temperament temperament_key brass_vibrato air air_set virtual_player brass_solo air_added
+clarinet visible mic=3 prep=2 volume dynamics variation mic_position mic_distance mic_spacing distance_level room concert_pitch temperament temperament_key brass_vibrato air air_set virtual_player brass_solo air_added
+clarinet visible mic=3 prep=3 volume dynamics variation mic_position mic_distance mic_spacing distance_level room concert_pitch temperament temperament_key brass_vibrato air air_set virtual_player brass_solo air_added
+clarinet visible mic=3 prep=4 volume dynamics variation mic_position mic_distance mic_spacing distance_level room concert_pitch temperament temperament_key brass_vibrato air air_set virtual_player brass_solo air_added
+clarinet visible mic=3 prep=5 volume dynamics variation mic_position mic_distance mic_spacing distance_level room concert_pitch temperament temperament_key brass_vibrato air air_set virtual_player brass_solo air_added
+clarinet visible mic=4 prep=0 volume dynamics variation mic_position mic_distance mic_spacing distance_level room concert_pitch temperament temperament_key brass_vibrato air air_set virtual_player brass_solo air_added
+clarinet visible mic=4 prep=1 volume dynamics variation mic_position mic_distance mic_spacing distance_level room concert_pitch temperament temperament_key brass_vibrato air air_set virtual_player brass_solo air_added
+clarinet visible mic=4 prep=2 volume dynamics variation mic_position mic_distance mic_spacing distance_level room concert_pitch temperament temperament_key brass_vibrato air air_set virtual_player brass_solo air_added
+clarinet visible mic=4 prep=3 volume dynamics variation mic_position mic_distance mic_spacing distance_level room concert_pitch temperament temperament_key brass_vibrato air air_set virtual_player brass_solo air_added
+clarinet visible mic=4 prep=4 volume dynamics variation mic_position mic_distance mic_spacing distance_level room concert_pitch temperament temperament_key brass_vibrato air air_set virtual_player brass_solo air_added
+clarinet visible mic=4 prep=5 volume dynamics variation mic_position mic_distance mic_spacing distance_level room concert_pitch temperament temperament_key brass_vibrato air air_set virtual_player brass_solo air_added
+clarinet visible mic=5 prep=0 volume dynamics variation mic_position mic_l_x mic_l_y mic_l_z mic_r_x mic_r_y mic_r_z mic_l_pattern mic_l_yaw mic_l_pitch mic_r_pattern mic_r_yaw mic_r_pitch distance_level room concert_pitch temperament temperament_key brass_vibrato air air_set virtual_player brass_solo air_added
+clarinet visible mic=5 prep=1 volume dynamics variation mic_position mic_l_x mic_l_y mic_l_z mic_r_x mic_r_y mic_r_z mic_l_pattern mic_l_yaw mic_l_pitch mic_r_pattern mic_r_yaw mic_r_pitch distance_level room concert_pitch temperament temperament_key brass_vibrato air air_set virtual_player brass_solo air_added
+clarinet visible mic=5 prep=2 volume dynamics variation mic_position mic_l_x mic_l_y mic_l_z mic_r_x mic_r_y mic_r_z mic_l_pattern mic_l_yaw mic_l_pitch mic_r_pattern mic_r_yaw mic_r_pitch distance_level room concert_pitch temperament temperament_key brass_vibrato air air_set virtual_player brass_solo air_added
+clarinet visible mic=5 prep=3 volume dynamics variation mic_position mic_l_x mic_l_y mic_l_z mic_r_x mic_r_y mic_r_z mic_l_pattern mic_l_yaw mic_l_pitch mic_r_pattern mic_r_yaw mic_r_pitch distance_level room concert_pitch temperament temperament_key brass_vibrato air air_set virtual_player brass_solo air_added
+clarinet visible mic=5 prep=4 volume dynamics variation mic_position mic_l_x mic_l_y mic_l_z mic_r_x mic_r_y mic_r_z mic_l_pattern mic_l_yaw mic_l_pitch mic_r_pattern mic_r_yaw mic_r_pitch distance_level room concert_pitch temperament temperament_key brass_vibrato air air_set virtual_player brass_solo air_added
+clarinet visible mic=5 prep=5 volume dynamics variation mic_position mic_l_x mic_l_y mic_l_z mic_r_x mic_r_y mic_r_z mic_l_pattern mic_l_yaw mic_l_pitch mic_r_pattern mic_r_yaw mic_r_pitch distance_level room concert_pitch temperament temperament_key brass_vibrato air air_set virtual_player brass_solo air_added
 horn body 18
 horn label aftertouch_to Aftertouch to|What pressing on a held key does.
 horn label air Air|How hard the air blows. Moving it (or its controller) takes over from the keys.
@@ -163,6 +243,7 @@ menu 01 Brass|Horn (experimental)|horn
 menu 02 Brass|Tenor Trombone (experimental)|tenor_trombone
 menu 03 Brass|Trumpet (experimental)|trumpet
 menu 04 Brass|Tuba (experimental)|tuba
+menu 05 Woodwinds|Clarinet (experimental)|clarinet
 tenor_trombone body 18
 tenor_trombone label aftertouch_to Aftertouch to|What pressing on a held key does.
 tenor_trombone label air Air|How hard the air blows. Moving it (or its controller) takes over from the keys.

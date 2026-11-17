@@ -304,6 +304,32 @@ fn the_report_says_where_the_bend_acts() {
     }
 }
 
+/// Growl, flutter and the aftertouch to either: on a bell's players the report's `lips` where each acts (a reed
+/// ignores them); the phrase presses at half, so that full growl, full flutter and the aftertouch's other target
+/// each change what the press does.
+#[test]
+fn the_report_says_where_growl_and_flutter_act() {
+    const BRASS: [(&str, Change); 3] = [
+        ("growl", |p, _| p.brass.growl = 1.0),
+        ("flutter", |p, _| p.brass.flutter = 1.0),
+        ("aftertouch_to", |p, _| p.brass.aftertouch_to = 1),
+    ];
+    let press = [Event::ChannelPressure { value: 0.5 }];
+    let names: Vec<String> = exported().into_iter().filter(|n| report(n).is_some_and(|i| i.brass.is_some())).collect();
+    let r = par(names.len() * 4, |j| render_with(&names[j / 4], (j % 4 > 0).then(|| BRASS[j % 4 - 1].1), &press));
+    let mut wrong = Vec::new();
+    for (k, name) in names.iter().enumerate() {
+        let lips = report(name).unwrap().brass.unwrap().lips;
+        for (c, (control, _)) in BRASS.iter().enumerate() {
+            let acts = r[4 * k + c + 1] != r[4 * k];
+            if acts != lips {
+                wrong.push(format!("{name}: {control} acts {acts}, reported lips {lips}"));
+            }
+        }
+    }
+    assert!(!names.is_empty() && wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
 /// The motor: the report's `motor` where it acts (the resonators' discs).
 #[test]
 fn the_report_says_where_the_motor_acts() {

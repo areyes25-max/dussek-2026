@@ -187,7 +187,7 @@ class Plunger(Mute):
         return Zt, Zt / Zg * out, Zr
 
 
-BELL = spec.S["bell"][1]  # the open bell's radius, m
+BELL = spec.S["bell"][1] if "bell" in spec.S else 0.0615  # the open bell's radius, m (a reed has no mutes: the trumpet's)
 SIZES = ("cut", "r_tip", "r_end", "length", "gap", "neck_r", "neck_L", "chamber_r", "chamber_L", "hole_r", "hole_L", "stem_r", "stem_L", "cup_r", "cup_L", "slit",
          "slit_L", "bowl_ro", "bowl_depth", "can_r", "can_L", "gap_L", "aperture")
 

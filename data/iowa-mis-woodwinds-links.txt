@@ -1,0 +1,14 @@
+sound files/MIS/Woodwinds/Bbclarinet/BbClar.pp.D3B3.aiff
+sound files/MIS/Woodwinds/Bbclarinet/BbClar.pp.C4B4.aiff
+sound files/MIS/Woodwinds/Bbclarinet/BbClar.pp.C5B5.aiff
+sound files/MIS/Woodwinds/Bbclarinet/BbClar.pp.C6B6.aiff
+sound files/MIS/Woodwinds/Bbclarinet/BbClar.mf.D3B3.aiff
+sound files/MIS/Woodwinds/Bbclarinet/BbClar.mf.C4B4.aiff
+sound files/MIS/Woodwinds/Bbclarinet/BbClar.mf.C5B5.aiff
+sound files/MIS/Woodwinds/Bbclarinet/BbClar.mf.C6B6.aiff
+sound files/MIS/Woodwinds/Bbclarinet/BbClar.ff.D3B3.aiff
+sound files/MIS/Woodwinds/Bbclarinet/BbClar.ff.C4B4.aiff
+sound files/MIS/Woodwinds/Bbclarinet/BbClar.ff.C5B5.aiff
+sound files/MIS/Woodwinds/Bbclarinet/BbClar.ff.C6B6.aiff
+sound files/MIS/Woodwinds/Bbclarinet/BbClar.mf.C7.aiff
+sound files/MIS/Woodwinds/Bbclarinet/BbClar.ambient.silence.aiff
