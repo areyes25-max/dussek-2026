@@ -1,7 +1,10 @@
 # The plugin
 
-A DPF wrapper (C++) around the engine's C interface: LV2, CLAP, VST3 and a JACK standalone.
-LV2 and the standalone are the main targets; all four are tested on Linux and Windows. The brass are
+A DPF wrapper (C++) around the engine's C interface: LV2, CLAP, VST3 and a JACK standalone, on
+macOS also an AudioUnit (AUv2, for Logic Pro and GarageBand). LV2 and the standalone are the main
+targets; all four are tested on Linux and Windows. The macOS build is universal (Apple silicon and
+Intel) and untested by hand: CI runs its UI tests on both chips (Intel under Rosetta) and the
+AudioUnits through Apple's `auval`. The brass are
 a second plugin's, built from the same sources and shipped in the same release as a preview: [Weidinger](brass.md).
 
 Where a host offers LV2 or CLAP, use them: the VST3 is kept for hosts that load nothing else.
@@ -21,6 +24,10 @@ just standalone    # the JACK standalone under PipeWire (--weidinger: Weidinger'
 ```
 
 `just install` makes links, so a rebuild updates the installed plugin.
+
+On macOS the build needs Rust's two Apple targets (`rustup target add aarch64-apple-darwin
+x86_64-apple-darwin`): the engine is built once per chip and joined by `lipo`. One chip's build is
+quicker: `cmake -S plugin -B plugin/build -DCMAKE_OSX_ARCHITECTURES=arm64`.
 
 `just standalone` (`plugin/tools/run-standalone.sh`) runs the JACK standalone as a desktop app,
 through `pw-jack`:

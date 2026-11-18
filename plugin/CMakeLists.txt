@@ -3,6 +3,9 @@
 cmake_minimum_required(VERSION 3.22)
 # macOS: the oldest release the builds run on (libc++'s std::to_chars for floats: 13.3)
 set(CMAKE_OSX_DEPLOYMENT_TARGET "13.3" CACHE STRING "the oldest macOS the builds run on")
+# macOS: one build for both chips, Apple silicon and Intel (the engine built per chip and joined by lipo);
+# -DCMAKE_OSX_ARCHITECTURES=arm64 builds one chip's only. Ignored elsewhere.
+set(CMAKE_OSX_ARCHITECTURES "arm64;x86_64" CACHE STRING "the chips the macOS builds run on")
 # the plugin's version: the hosts' (getVersion) and the About tab's
 project(dussek-plugin VERSION 0.4.1 LANGUAGES C CXX)
 
@@ -22,13 +25,41 @@ add_subdirectory(dpf)
 # the engine, built by cargo
 find_program(CARGO cargo REQUIRED)
 set(ENGINE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../engine)
-set(ENGINE_LIB ${ENGINE_DIR}/target/release/${CMAKE_STATIC_LIBRARY_PREFIX}dussek${CMAKE_STATIC_LIBRARY_SUFFIX})
-add_custom_target(engine_cargo
-  COMMAND ${CMAKE_COMMAND} -E env MACOSX_DEPLOYMENT_TARGET=${CMAKE_OSX_DEPLOYMENT_TARGET}
-          ${CARGO} build --release --lib --manifest-path ${ENGINE_DIR}/Cargo.toml
-  BYPRODUCTS ${ENGINE_LIB}
-  USES_TERMINAL
-  COMMENT "cargo build (engine)")
+if(APPLE AND CMAKE_OSX_ARCHITECTURES)
+  # macOS: the engine once per chip (rustup target add aarch64-apple-darwin x86_64-apple-darwin), then one
+  # library with both (lipo)
+  set(_engine_builds "")
+  set(_engine_libs "")
+  foreach(arch ${CMAKE_OSX_ARCHITECTURES})
+    if(arch STREQUAL "arm64")
+      set(_triple aarch64-apple-darwin)
+    elseif(arch STREQUAL "x86_64")
+      set(_triple x86_64-apple-darwin)
+    else()
+      message(FATAL_ERROR "CMAKE_OSX_ARCHITECTURES: no Rust target for ${arch}")
+    endif()
+    list(APPEND _engine_builds
+      COMMAND ${CMAKE_COMMAND} -E env MACOSX_DEPLOYMENT_TARGET=${CMAKE_OSX_DEPLOYMENT_TARGET}
+              ${CARGO} build --release --lib --target ${_triple} --manifest-path ${ENGINE_DIR}/Cargo.toml)
+    list(APPEND _engine_libs ${ENGINE_DIR}/target/${_triple}/release/libdussek.a)
+  endforeach()
+  set(ENGINE_LIB ${CMAKE_CURRENT_BINARY_DIR}/engine/libdussek.a)
+  add_custom_target(engine_cargo
+    ${_engine_builds}
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_BINARY_DIR}/engine
+    COMMAND lipo -create ${_engine_libs} -output ${ENGINE_LIB}
+    BYPRODUCTS ${ENGINE_LIB}
+    USES_TERMINAL
+    COMMENT "cargo build (engine: ${CMAKE_OSX_ARCHITECTURES})")
+else()
+  set(ENGINE_LIB ${ENGINE_DIR}/target/release/${CMAKE_STATIC_LIBRARY_PREFIX}dussek${CMAKE_STATIC_LIBRARY_SUFFIX})
+  add_custom_target(engine_cargo
+    COMMAND ${CMAKE_COMMAND} -E env MACOSX_DEPLOYMENT_TARGET=${CMAKE_OSX_DEPLOYMENT_TARGET}
+            ${CARGO} build --release --lib --manifest-path ${ENGINE_DIR}/Cargo.toml
+    BYPRODUCTS ${ENGINE_LIB}
+    USES_TERMINAL
+    COMMENT "cargo build (engine)")
+endif()
 add_library(engine STATIC IMPORTED)
 set_target_properties(engine PROPERTIES IMPORTED_LOCATION ${ENGINE_LIB})
 if(WIN32)
@@ -43,9 +74,14 @@ find_library(RT_LIB rt)
 # the two plugins, from the same sources: Dussek (the keyboard instruments) and Weidinger (the brass);
 # each its own DistrhoPluginInfo.h (src/plugins/<name>/: the name, the IDs, PE_PLUGIN_KIND)
 set(PE_PLUGINS dussek weidinger)
+# macOS adds an AudioUnit (AUv2: Logic Pro and GarageBand load nothing else)
+set(PE_TARGETS lv2 vst3 clap jack)
+if(APPLE)
+  list(APPEND PE_TARGETS au)
+endif()
 foreach(p ${PE_PLUGINS})
   dpf_add_plugin(${p}
-    TARGETS lv2 vst3 clap jack
+    TARGETS ${PE_TARGETS}
     UI_TYPE opengl
     USE_FILE_BROWSER
     FILES_DSP src/PianoPlugin.cpp

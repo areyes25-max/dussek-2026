@@ -11,6 +11,10 @@ break is allowed but listed under "Breaking" (`docs/compatibility.md`).
   DirectSound on Windows) and the output device, with the ASIO driver's control panel; the choice
   and the buffer size are kept for the next start. ASIO works with no extra download. The MIDI
   inputs row names the connected inputs. Contributed by [@deliosiret](https://github.com/deliosiret).
+- macOS: the build runs on Intel Macs too (one universal build), and both plugins come as an
+  AudioUnit as well, for Logic Pro and GarageBand (in the package, each a choice of its own).
+  Untested by hand, like the rest of the macOS build: CI checks the AudioUnits with Apple's
+  `auval`.
 
 ### Changed
 

@@ -5,19 +5,21 @@
 <installer-gui-script minSpecVersion="2">
     <title>Dussek</title>
     <welcome file="welcome.txt"/>
-    <options customize="always" require-scripts="false" hostArchitectures="arm64"/>
+    <options customize="always" require-scripts="false" hostArchitectures="arm64,x86_64"/>
     <domains enable_localSystem="true"/>
     <choices-outline>
         <line choice="app"/>
         <line choice="lv2"/>
         <line choice="clap"/>
         <line choice="vst3"/>
+        <line choice="au"/>
         <line choice="instruments"/>
         <line choice="weidinger">
             <line choice="weidinger-app"/>
             <line choice="weidinger-lv2"/>
             <line choice="weidinger-clap"/>
             <line choice="weidinger-vst3"/>
+            <line choice="weidinger-au"/>
         </line>
     </choices-outline>
     <choice id="app" title="The standalone" description="Dussek in Applications.">
@@ -31,6 +33,9 @@
     </choice>
     <choice id="vst3" title="VST3 plugin" description="In /Library/Audio/Plug-Ins/VST3. Where a host offers LV2 or CLAP, prefer them.">
         <pkg-ref id="de.ccoors.dussek.vst3"/>
+    </choice>
+    <choice id="au" title="AudioUnit" description="In /Library/Audio/Plug-Ins/Components: for Logic Pro and GarageBand.">
+        <pkg-ref id="de.ccoors.dussek.au"/>
     </choice>
     <choice id="instruments" title="The instruments" description="In /Library/Application Support/Dussek: the standalone and every plugin format play them." enabled="false" selected="true">
         <pkg-ref id="de.ccoors.dussek.instruments"/>
@@ -50,14 +55,19 @@
     <choice id="weidinger-vst3" title="Weidinger's VST3 plugin" description="In /Library/Audio/Plug-Ins/VST3.">
         <pkg-ref id="de.ccoors.dussek.weidinger-vst3"/>
     </choice>
+    <choice id="weidinger-au" title="Weidinger's AudioUnit" description="In /Library/Audio/Plug-Ins/Components.">
+        <pkg-ref id="de.ccoors.dussek.weidinger-au"/>
+    </choice>
     <pkg-ref id="de.ccoors.dussek.app">app.pkg</pkg-ref>
     <pkg-ref id="de.ccoors.dussek.lv2">lv2.pkg</pkg-ref>
     <pkg-ref id="de.ccoors.dussek.clap">clap.pkg</pkg-ref>
     <pkg-ref id="de.ccoors.dussek.vst3">vst3.pkg</pkg-ref>
+    <pkg-ref id="de.ccoors.dussek.au">au.pkg</pkg-ref>
     <pkg-ref id="de.ccoors.dussek.instruments">instruments.pkg</pkg-ref>
     <pkg-ref id="de.ccoors.dussek.brass">brass.pkg</pkg-ref>
     <pkg-ref id="de.ccoors.dussek.weidinger-app">weidinger-app.pkg</pkg-ref>
     <pkg-ref id="de.ccoors.dussek.weidinger-lv2">weidinger-lv2.pkg</pkg-ref>
     <pkg-ref id="de.ccoors.dussek.weidinger-clap">weidinger-clap.pkg</pkg-ref>
     <pkg-ref id="de.ccoors.dussek.weidinger-vst3">weidinger-vst3.pkg</pkg-ref>
+    <pkg-ref id="de.ccoors.dussek.weidinger-au">weidinger-au.pkg</pkg-ref>
 </installer-gui-script>

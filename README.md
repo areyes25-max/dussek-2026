@@ -2,7 +2,8 @@
 
 A physically modeled piano, as an LV2, CLAP and VST3 plugin and a standalone. It is tested on Linux
 and Windows, in all four forms (where a host offers LV2 or CLAP, prefer them to VST3:
-[docs/plugin.md](docs/plugin.md)); the macOS build (Apple silicon) comes from CI and is untested:
+[docs/plugin.md](docs/plugin.md)); the macOS build (Apple silicon and Intel, with an AudioUnit for Logic Pro and GarageBand) comes from CI
+and is untested:
 reports welcome. It plays nine grands, four uprights, six harpsichords, a clavichord, harps,
 guitars, zithers and percussion. None of them plays back a recording: the engine simulates the
 hammer (or plectrum, or mallet), stiff strings with coupled unisons, the soundboard, the dampers and
@@ -42,8 +43,9 @@ instrument and the features. From the [releases](https://github.com/ccoors/dusse
   (in the Start menu), the LV2, CLAP and VST3 plugins (each one optional) and the instruments, with
   an uninstaller. It is not signed: SmartScreen warns about an unknown publisher; "More info", then
   "Run anyway".
-- **macOS** (Apple silicon, 13.3 or newer; untested, reports welcome): `dussek-<version>-macos.pkg`
-  installs Dussek in Applications and the plugins in `/Library/Audio/Plug-Ins`. It is not signed
+- **macOS** (Apple silicon or Intel, 13.3 or newer; untested, reports welcome): `dussek-<version>-macos.pkg`
+  installs Dussek in Applications and the plugins in `/Library/Audio/Plug-Ins` (LV2, CLAP, VST3 and
+  an AudioUnit, the one Logic Pro and GarageBand load). It is not signed
   by a registered developer: right-click it and choose Open, or allow it in System Settings →
   Privacy & Security ("Open Anyway").
 - **Linux** (x86-64, glibc 2.35 or newer): unpack `dussek-<version>-linux.tar.gz` and run

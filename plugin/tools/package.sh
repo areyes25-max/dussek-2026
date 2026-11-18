@@ -3,8 +3,8 @@
 # are made from it):
 #   plugin/tools/package.sh <platform>   ->  dist/dussek-<version>-<platform>/ (its path printed last)
 # Both plugins, Dussek and Weidinger (the brass, a preview): the standalones, the LV2, CLAP and VST3
-# bundles as built, every instrument's committed files (each plugin lists its own), the license and
-# README.txt; on Linux also install.sh, uninstall.sh, the desktop entries and the icon.
+# bundles as built (on macOS the AudioUnit too), every instrument's committed files (each plugin
+# lists its own), the license and README.txt; on Linux also install.sh, uninstall.sh, the desktop entries and the icon.
 # Run from the repository's root after `just plugin`.
 set -euo pipefail
 platform=${1:?usage: package.sh linux|macos|windows}
@@ -15,7 +15,7 @@ out=dist/dussek-$version-$platform
 rm -rf "$out"
 mkdir -p "$out/instruments"
 for p in dussek weidinger; do
-    for f in $p $p.exe $p.lv2 $p.clap $p.vst3; do
+    for f in $p $p.exe $p.lv2 $p.clap $p.vst3 $p.component; do
         [ -e "$bin/$f" ] && cp -R "$bin/$f" "$out/"
     done
 done
@@ -33,9 +33,9 @@ git ls-files -z instruments | while IFS= read -r -d '' f; do
 done
 cp LICENSE "$out/LICENSE.txt"
 commit=$(git describe --always --dirty 2>/dev/null || echo unknown)
-tested="The standalone, LV2, CLAP and VST3 are tested on Linux and Windows; the macOS build is untested
-(reports welcome). Where a host offers LV2 or CLAP, prefer them: the VST3 has limits (no presets in
-the host's menu, no diagnostics panels in some hosts)."
+tested="The standalone, LV2, CLAP and VST3 are tested on Linux and Windows; the macOS build (its
+AudioUnit too) is untested (reports welcome). Where a host offers LV2 or CLAP, prefer them: the
+VST3 has limits (no presets in the host's menu, no diagnostics panels in some hosts)."
 case $platform in
     linux)
         cp packaging/linux/install.sh packaging/linux/uninstall.sh packaging/linux/dussek.desktop packaging/linux/weidinger.desktop "$out/"
@@ -53,11 +53,11 @@ Built with glibc $glibc: a Linux with glibc $glibc or newer." ;;
         how="Install: the release's dussek-$version-macos.pkg does all of this. Without installing,
 Dussek.app and Weidinger.app play the instruments beside them: open them from this folder. By hand, for the plugins:
 copy the folder \"instruments\" into ~/Library/Application Support/Dussek, the bundles into
-~/Library/Audio/Plug-Ins/LV2, …/CLAP, …/VST3. Not signed: the first time,
-right-click the app and choose Open, or run
-  xattr -dr com.apple.quarantine Dussek.app dussek.lv2 dussek.clap dussek.vst3 \\
-    Weidinger.app weidinger.lv2 weidinger.clap weidinger.vst3
-Built for Apple silicon (arm64), macOS 13.3 or newer; not for Intel Macs." ;;
+~/Library/Audio/Plug-Ins/LV2, …/CLAP, …/VST3, …/Components (the AudioUnits, for Logic Pro and
+GarageBand). Not signed: the first time, right-click the app and choose Open, or run
+  xattr -dr com.apple.quarantine Dussek.app dussek.lv2 dussek.clap dussek.vst3 dussek.component \\
+    Weidinger.app weidinger.lv2 weidinger.clap weidinger.vst3 weidinger.component
+Built for Apple silicon and Intel (one universal build), macOS 13.3 or newer." ;;
     windows)
         how="Install: the release's dussek-$version-windows-setup.exe does all of this. Without installing,
 dussek.exe and weidinger.exe play the instruments beside them: start them from this folder. By hand,

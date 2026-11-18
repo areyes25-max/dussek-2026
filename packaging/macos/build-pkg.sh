@@ -1,7 +1,8 @@
 #!/bin/bash
 # Dussek's macOS package, Weidinger in it as a choice of its own, from the portable folder (plugin/tools/package.sh macos):
 #   packaging/macos/build-pkg.sh <version> <dist/dussek-<version>-macos>  ->  dist/dussek-<version>-macos.pkg
-# Each bundle signed ad hoc (Apple silicon runs nothing unsigned), one component package each, then
+# Each bundle signed ad hoc (Apple silicon runs nothing unsigned; the builds are universal, one signature
+# per chip), one component package each, then
 # the product with the choices of distribution.xml. Bundles are not relocatable: the installer puts
 # them where it says, not where another copy with the same identifier happens to be.
 set -euo pipefail
@@ -13,7 +14,7 @@ work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 
 # the apps (package.sh made them: DPF builds plain executables), Dussek's in app/, lv2/, …, Weidinger's in
-# weidinger-app/, weidinger-lv2/, …
+# weidinger-app/, weidinger-lv2/, …; the AudioUnits (.component) in au/, weidinger-au/
 for p in dussek weidinger; do
     pre=$([ $p = weidinger ] && echo weidinger- || true)
     app=$([ $p = weidinger ] && echo Weidinger.app || echo Dussek.app)
@@ -23,7 +24,9 @@ for p in dussek weidinger; do
         mkdir -p "$work/$pre$b"
         cp -R "$src/$p.$b" "$work/$pre$b/"
     done
-    for b in "$work/${pre}app/$app" "$work/${pre}clap/$p.clap" "$work/${pre}vst3/$p.vst3"; do
+    mkdir -p "$work/${pre}au"
+    cp -R "$src/$p.component" "$work/${pre}au/"
+    for b in "$work/${pre}app/$app" "$work/${pre}clap/$p.clap" "$work/${pre}vst3/$p.vst3" "$work/${pre}au/$p.component"; do
         codesign --force --deep -s - "$b"
     done
     # an LV2 bundle is a plain folder, not a macOS bundle: its libraries are signed one by one
@@ -49,11 +52,13 @@ component app "$work/app" /Applications
 component lv2 "$work/lv2" /Library/Audio/Plug-Ins/LV2
 component clap "$work/clap" /Library/Audio/Plug-Ins/CLAP
 component vst3 "$work/vst3" /Library/Audio/Plug-Ins/VST3
+component au "$work/au" /Library/Audio/Plug-Ins/Components
 component instruments "$work/instruments" "/Library/Application Support/Dussek/instruments" "$here/scripts"
 component weidinger-app "$work/weidinger-app" /Applications
 component weidinger-lv2 "$work/weidinger-lv2" /Library/Audio/Plug-Ins/LV2
 component weidinger-clap "$work/weidinger-clap" /Library/Audio/Plug-Ins/CLAP
 component weidinger-vst3 "$work/weidinger-vst3" /Library/Audio/Plug-Ins/VST3
+component weidinger-au "$work/weidinger-au" /Library/Audio/Plug-Ins/Components
 component brass "$work/brass" "/Library/Application Support/Dussek/instruments"
 
 mkdir -p "$(dirname "$out")"

@@ -4682,3 +4682,28 @@ RtAudio fallback to the default output alone: on Windows only through WASAPI, wi
 - **Tests.** `ui_tests` adds the section's rows on native audio, `audio.txt` and the backend's dispatch, the window's
   placement (centering, clamping, `window.txt`) and the session's round trip (349 tests, 0 failed checks). CI passes on
   Linux, Windows and macOS; the macOS standalone's audio and the Linux fallback's new rows are not tried by hand.
+
+<a id="step-258"></a>
+## 258. macOS: universal, and an AudioUnit
+
+The macOS build ran on Apple silicon only, and Logic Pro and GarageBand, which load only AudioUnits, could not open
+either plugin. DPF builds both: CMake's `CMAKE_OSX_ARCHITECTURES` and its `au` format.
+
+- **Universal.** `plugin/CMakeLists.txt` sets `CMAKE_OSX_ARCHITECTURES` to `arm64;x86_64` (a cache value: `arm64`
+  alone builds one chip). The C++ follows it; the engine, built by cargo, is built once per chip (`--target
+  aarch64-apple-darwin`, `x86_64-apple-darwin`) and joined into one static library by `lipo`. The engine's x86_64 code
+  is Linux's and Windows's (AVX2 and FMA chosen at run time with a plain fallback, step 164). The program files
+  double in size; the instruments, most of the package, do not change.
+- **The AudioUnit.** `au` joins the formats on macOS (AUv2, type `aumu`, the IDs already in `DistrhoPluginInfo.h`:
+  `Ccrs` with `Dsek` and `Wdgr`). An AudioUnit finds the instruments where every macOS format does (`/Library` and
+  `~/Library/Application Support/Dussek`): no path of its own. The parameters' indices are its parameter IDs, so the
+  table's append-only rule keeps saved projects loading.
+- **Packaging.** `package.sh` copies `<name>.component`; `build-pkg.sh` signs it ad hoc and installs it in
+  `/Library/Audio/Plug-Ins/Components`, a choice of its own for each plugin in `distribution.xml`, whose
+  `hostArchitectures` now names both chips.
+- **Checks.** On the Apple silicon runner CI runs `ui_tests` twice (the second under Rosetta) and a render of the Intel
+  half (`platforms.yml`); `auval -v aumu Dsek Ccrs` and `aumu Wdgr Ccrs` must pass (Logic loads no AudioUnit that fails
+  it). `check-install.sh` also checks that every installed binary carries both chips (`lipo -archs`) and runs `auval`
+  on the installed components.
+
+Not tried by hand: an Intel Mac, Logic Pro, GarageBand.

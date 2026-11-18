@@ -16,11 +16,11 @@ cat <<TXT
 
 ---
 
-**Install:** Windows: \`dussek-$version-windows-setup.exe\`; macOS (Apple silicon):
+**Install:** Windows: \`dussek-$version-windows-setup.exe\`; macOS (Apple silicon or Intel):
 \`dussek-$version-macos.pkg\`; Linux: unpack \`dussek-$version-linux.tar.gz\` and run \`./install.sh\`.
 \`dussek-$version-windows-portable.zip\` and \`dussek-$version-macos-portable.tar.gz\` hold the same
 files to copy by hand (their \`README.txt\` says where). If you tried a test build, remove the
-bundles you copied by hand first (\`dussek.lv2\`, \`.clap\`, \`.vst3\` in \`%APPDATA%\\LV2\` or
+bundles you copied by hand first (\`dussek.lv2\`, \`.clap\`, \`.vst3\`, \`.component\` in \`%APPDATA%\\LV2\` or
 \`~/Library/Audio/Plug-Ins\`): hosts prefer them to the installed ones.
 
 **Weidinger**, the winds (trumpet, horn, tenor and bass trombone, tuba, clarinet), comes in the same files as a

@@ -94,13 +94,19 @@ jobs:
         with:
           submodules: recursive
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin   # the universal build's two chips
       - uses: taiki-e/install-action@v2
         with:
           tool: just
       - name: Build the plugin (and the engine)
         run: just plugin
-      - name: The plugin's UI tests
-        run: plugin/build/ui_tests
+      - name: Rosetta (the Intel half runs on this Apple silicon runner)
+        run: arch -x86_64 /usr/bin/true 2>/dev/null || sudo softwareupdate --install-rosetta --agree-to-license
+      - name: The plugin's UI tests (each chip)
+        run: |
+          plugin/build/ui_tests
+          arch -x86_64 plugin/build/ui_tests
       - name: The portable folder
         run: |
           out=$(plugin/tools/package.sh macos | tail -n 1)
