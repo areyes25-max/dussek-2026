@@ -3,6 +3,21 @@
 What each release changes for a player. From 1.0 on a break needs a major version; before it, a
 break is allowed but listed under "Breaking" (`docs/compatibility.md`).
 
+## Unreleased
+
+### New
+
+- Without a JACK server, the standalone's MIDI tab picks the audio engine (WASAPI, ASIO or
+  DirectSound on Windows) and the output device, with the ASIO driver's control panel; the choice
+  and the buffer size are kept for the next start. ASIO works with no extra download. The MIDI
+  inputs row names the connected inputs. Contributed by [@deliosiret](https://github.com/deliosiret).
+
+### Changed
+
+- The standalone starts where it was left: the instrument, every parameter, the velocity curve,
+  morph, felt and Scala scale, the selected tab, and the window's size and place (on first start
+  the window opens centered).
+
 ## 0.4.1 — 2026-11-17
 
 ### New

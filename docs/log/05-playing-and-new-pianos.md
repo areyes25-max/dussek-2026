@@ -4651,3 +4651,34 @@ Dussek's icon it now has its own:
 - **The site.** `weidinger.html` takes `icon-weidinger.png` as its tab's icon; the header's wordmark stays Dussek's.
 
 The Windows resource and the macOS app are first built in the release workflow.
+
+<a id="step-257"></a>
+## 257. The standalone's audio engine and device, and its session (PR 2)
+
+A contribution ([@deliosiret](https://github.com/deliosiret), [PR 2](https://github.com/ccoors/dussek/pull/2)), tested by its author on Windows 11 with WASAPI,
+DirectSound and ASIO (a USB audio interface) and a hardware MIDI input. Without a JACK server the standalone played DPF's
+RtAudio fallback to the default output alone: on Windows only through WASAPI, with no choice of device and no ASIO.
+
+- **The bridge.** `plugin/src/StandaloneAudioBridge.hpp` is a copy of DPF's `RtAudioBridge.hpp` (its notice kept) with the
+  engine and the device chosen at run time; `StandaloneMain.cpp` includes it before `DistrhoPluginJACK.cpp`, so the
+  `-jack` targets take it in place of DPF's main and the submodule stays as it is. Its preamble is DPF's, plus ASIO and
+  DirectSound on Windows (MinGW). `plugin/src/asio/` is a small clean-room host layer (the COM interface and the
+  registry's driver list), so ASIO builds without Steinberg's SDK. Registered ASIO drivers whose hardware is not
+  connected are skipped when the default is picked.
+- **The MIDI tab.** The **Audio and MIDI** section gains **Audio engine** and **Audio device** above the buffer row (on
+  native audio only; not in a host, not under JACK); with ASIO the device menu ends in **ASIO control panel…**. A device
+  lists only with outputs (a capture-only one was listed, and picking it failed); a saved device is found by its name,
+  on ASIO also by its first 31 characters (ASIO cuts names there). The engine, the device and the buffer size are kept in
+  `<config>/audio.txt`; a saved device that is gone falls back to the default. The MIDI inputs row names the open ports.
+- **The session.** The standalone now saves its last session in `<config>/session.txt` (Weidinger's
+  `weidinger-session.txt`): the instrument, every parameter, the sound-carrying states (velocity curve, morph, felt,
+  Scala scale) and the UI's state, in the preset format; it is restored on launch and written 250 ms after the last
+  change. `window.txt` keeps the window's size, place and maximized state beside the zoom; with none saved the window
+  opens centered on the work area, and a saved place is clamped to it. Before this the standalone kept no session (each
+  start began from the instrument's defaults).
+- **macOS.** The bridge includes `RtAudio.h`, and through it `MacTypes.h`, before DPF's `JackBridge.cpp` renames `Point`
+  and `Size` to `CorePoint` and `CoreSize` for `RtAudio.cpp` and `RtMidi.cpp`; the bridge now renames them the same way
+  (it had `CocoaPoint` and no `Size`, and the macOS standalone did not compile).
+- **Tests.** `ui_tests` adds the section's rows on native audio, `audio.txt` and the backend's dispatch, the window's
+  placement (centering, clamping, `window.txt`) and the session's round trip (349 tests, 0 failed checks). CI passes on
+  Linux, Windows and macOS; the macOS standalone's audio and the Linux fallback's new rows are not tried by hand.
