@@ -60,12 +60,16 @@
 #define RTMIDI_DO_NOT_ENSURE_UNIQUE_PORTNAMES
 
 #ifdef DISTRHO_OS_MAC
-# define Point CocoaPoint
+// the macOS headers' Point and Size under DPF's names (JackBridge.cpp): it includes
+// RtAudio.cpp and RtMidi.cpp after this header with the same renames active
+# define Point CorePoint
+# define Size CoreSize
 #endif
 #include "rtaudio/RtAudio.h"
 #include "rtmidi/RtMidi.h"
 #ifdef DISTRHO_OS_MAC
 # undef Point
+# undef Size
 #endif
 
 #if defined(DISTRHO_OS_WINDOWS)
