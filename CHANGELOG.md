@@ -16,6 +16,11 @@ break is allowed but listed under "Breaking" (`docs/compatibility.md`).
   Untested by hand, like the rest of the macOS build: CI checks the AudioUnits with Apple's
   `auval`.
 
+### Fixed
+
+- macOS: with Dussek and Weidinger loaded in one host, their windows ran one plugin's window code
+  for both (DPF's window classes, of the same name in each); each plugin now has its own.
+
 ### Changed
 
 - The standalone starts where it was left: the instrument, every parameter, the velocity curve,

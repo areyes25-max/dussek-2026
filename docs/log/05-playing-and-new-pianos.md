@@ -4694,10 +4694,17 @@ either plugin. DPF builds both: CMake's `CMAKE_OSX_ARCHITECTURES` and its `au` f
   aarch64-apple-darwin`, `x86_64-apple-darwin`) and joined into one static library by `lipo`. The engine's x86_64 code
   is Linux's and Windows's (AVX2 and FMA chosen at run time with a plain fallback, step 164). The program files
   double in size; the instruments, most of the package, do not change.
-- **The AudioUnit.** `au` joins the formats on macOS (AUv2, type `aumu`, the IDs already in `DistrhoPluginInfo.h`:
-  `Ccrs` with `Dsek` and `Wdgr`). An AudioUnit finds the instruments where every macOS format does (`/Library` and
+- **The AudioUnit.** `au` joins the formats on macOS (AUv2, the IDs already in `DistrhoPluginInfo.h`: `Ccrs` with
+  `Dsek` and `Wdgr`). Both are instruments (`aumu`): DPF made Dussek, a synth with inputs (the strings ringing along),
+  a MIDI-controlled effect (`aumf`), which Logic offers on audio tracks only; `DISTRHO_PLUGIN_AU_TYPE` now says so. An AudioUnit finds the instruments where every macOS format does (`/Library` and
   `~/Library/Application Support/Dussek`): no path of its own. The parameters' indices are its parameter IDs, so the
   table's append-only rule keeps saved projects loading.
+- **Each plugin its own DGL.** The first run's `auval -a`, loading both, found every pugl class (the window, its
+  views) twice: DPF builds one DGL for all plugins of a build, and Objective-C classes are global to a process, named
+  after `DGL_NAMESPACE`. A host with both loaded used one plugin's classes for the other's windows (in the released
+  CLAP and VST3 too). `plugin/CMakeLists.txt` now builds a copy of `dgl-opengl` for Weidinger, `DGL_NAMESPACE`
+  `DussekDGL` and `WeidingerDGL`, on every platform (Windows' window classes are named per process too); on Linux
+  each binary carries only its own (`nm`: 2301 symbols each, none of the other's), both standalones open their window.
 - **Packaging.** `package.sh` copies `<name>.component`; `build-pkg.sh` signs it ad hoc and installs it in
   `/Library/Audio/Plug-Ins/Components`, a choice of its own for each plugin in `distribution.xml`, whose
   `hostArchitectures` now names both chips.

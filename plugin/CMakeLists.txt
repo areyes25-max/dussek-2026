@@ -105,15 +105,43 @@ foreach(p ${PE_PLUGINS})
   endif()
 endforeach()
 
+# each plugin its own DGL, under its own namespace: DPF builds one for every plugin of a build, and its
+# Objective-C classes (pugl's window and views, named after DGL_NAMESPACE) are global to a process, so a
+# macOS host with Dussek and Weidinger loaded had two of each and used one plugin's for both. The copy takes
+# dgl-opengl's sources and settings; Weidinger's UI links it in dgl-opengl's place.
+get_target_property(_dgl_sources dgl-opengl SOURCES)
+add_library(dgl-opengl-weidinger STATIC ${_dgl_sources})
+foreach(prop COMPILE_DEFINITIONS COMPILE_OPTIONS COMPILE_FEATURES INCLUDE_DIRECTORIES LINK_LIBRARIES
+             INTERFACE_COMPILE_DEFINITIONS INTERFACE_COMPILE_OPTIONS INTERFACE_INCLUDE_DIRECTORIES
+             INTERFACE_LINK_LIBRARIES INTERFACE_LINK_OPTIONS POSITION_INDEPENDENT_CODE
+             C_VISIBILITY_PRESET CXX_VISIBILITY_PRESET VISIBILITY_INLINES_HIDDEN)
+  get_target_property(_v dgl-opengl ${prop})
+  if(NOT _v STREQUAL "_v-NOTFOUND")
+    set_property(TARGET dgl-opengl-weidinger PROPERTY ${prop} "${_v}")
+  endif()
+endforeach()
+target_compile_definitions(dgl-opengl PUBLIC DGL_NAMESPACE=DussekDGL)
+target_compile_definitions(dgl-opengl-weidinger PUBLIC DGL_NAMESPACE=WeidingerDGL)
+foreach(prop LINK_LIBRARIES INTERFACE_LINK_LIBRARIES)
+  get_target_property(_v weidinger-ui ${prop})
+  list(TRANSFORM _v REPLACE "^dgl-opengl$" "dgl-opengl-weidinger")
+  list(TRANSFORM _v REPLACE "^\\$<LINK_ONLY:dgl-opengl>$" "$<LINK_ONLY:dgl-opengl-weidinger>")
+  set_property(TARGET weidinger-ui PROPERTY ${prop} "${_v}")
+endforeach()
+
 # the standalones' window icon, each plugin's (in a host the window is the host's): on X11 DPF sets _NET_WM_ICON
 # from the array PianoUI.cpp defines (src/ui/WindowIcon-<name>.inc, from packaging/icon/render.sh; the size its
 # length, the same for both), on Windows from the icon resource compiled into each standalone; macOS's app carries
 # its own (packaging/macos)
 if(UNIX AND NOT APPLE)
-  target_compile_definitions(dgl-opengl PUBLIC DGL_X11_WINDOW_ICON_NAME=pe_window_icon DGL_X11_WINDOW_ICON_SIZE=21510)
+  foreach(t dgl-opengl dgl-opengl-weidinger)
+    target_compile_definitions(${t} PUBLIC DGL_X11_WINDOW_ICON_NAME=pe_window_icon DGL_X11_WINDOW_ICON_SIZE=21510)
+  endforeach()
 elseif(WIN32)
   enable_language(RC)
-  target_compile_definitions(dgl-opengl PUBLIC DGL_WINDOWS_ICON_ID=1)
+  foreach(t dgl-opengl dgl-opengl-weidinger)
+    target_compile_definitions(${t} PUBLIC DGL_WINDOWS_ICON_ID=1)
+  endforeach()
   foreach(p ${PE_PLUGINS})
     file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/generated/WindowIcon-${p}.rc
          "1 ICON \"${CMAKE_CURRENT_SOURCE_DIR}/../packaging/icon/${p}.ico\"\n")

@@ -25,6 +25,9 @@
 #define DISTRHO_PLUGIN_IS_SYNTH         1
 #define DISTRHO_PLUGIN_NUM_INPUTS       2
 #define DISTRHO_PLUGIN_NUM_OUTPUTS      2
+// AudioUnit: an instrument (DPF makes a synth with inputs a MIDI-controlled effect, aumf, which Logic offers on
+// audio tracks only); the inputs stay, for the strings ringing along
+#define DISTRHO_PLUGIN_AU_TYPE          aumu
 #define DISTRHO_PLUGIN_WANT_MIDI_INPUT  1
 #define DISTRHO_PLUGIN_WANT_LATENCY     1
 // MIDI learn sets parameters from the DSP side and tells the host (where it takes such requests)
