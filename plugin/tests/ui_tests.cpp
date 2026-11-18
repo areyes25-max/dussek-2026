@@ -7639,15 +7639,15 @@ TEST(standalone_audio_engine_and_device_rows_appear_on_native_audio)
 TEST(standalone_audio_config_and_backend_dispatch)
 {
     const StandaloneAudioConfig parsed = parseStandaloneAudioConfig(
-        "# comment\nengine = ASIO\ndevice = Focusrite USB ASIO\nbuffer = 256\n");
+        "# comment\nengine = ASIO\ndevice = USB Audio ASIO\nbuffer = 256\n");
     CHECK(parsed.engine == "ASIO");
-    CHECK(parsed.device == "Focusrite USB ASIO");
+    CHECK(parsed.device == "USB Audio ASIO");
     CHECK(parsed.bufferSize == 256u);
 
     const std::string formatted = formatStandaloneAudioConfig(parsed);
     const StandaloneAudioConfig roundtrip = parseStandaloneAudioConfig(formatted);
     CHECK(roundtrip.engine == "ASIO");
-    CHECK(roundtrip.device == "Focusrite USB ASIO");
+    CHECK(roundtrip.device == "USB Audio ASIO");
     CHECK(roundtrip.bufferSize == 256u);
 
     std::string activeEngine = "WASAPI";
@@ -7665,12 +7665,12 @@ TEST(standalone_audio_config_and_backend_dispatch)
             return false;
         }
         activeEngine = eng;
-        activeDevice = (eng == "ASIO") ? "ASIO4ALL v2" : "Default";
+        activeDevice = (eng == "ASIO") ? "Generic Low Latency ASIO" : "Default";
         return true;
     };
     backend.getDevices = [&]() -> std::vector<std::string> {
         if (activeEngine == "ASIO")
-            return { "ASIO4ALL v2", "Focusrite USB ASIO" };
+            return { "Generic Low Latency ASIO", "USB Audio ASIO" };
         return { "Default", "Speakers (Realtek Audio)" };
     };
     backend.getCurrentDevice = [&]() { return activeDevice; };
@@ -7691,23 +7691,23 @@ TEST(standalone_audio_config_and_backend_dispatch)
         return true;
     };
     backend.getMidiInputs = []() -> std::vector<std::string> {
-        return { "Yamaha CVP-208-1", "Focusrite USB MIDI" };
+        return { "Digital Piano MIDI 1", "USB MIDI Interface" };
     };
 
     setStandaloneAudioBackend(backend);
     CHECK(hasStandaloneAudioBackend());
     CHECK(standaloneAudioEngines() == std::vector<std::string>({ "WASAPI", "ASIO", "DirectSound" }));
-    CHECK(standaloneMidiInputs() == std::vector<std::string>({ "Yamaha CVP-208-1", "Focusrite USB MIDI" }));
+    CHECK(standaloneMidiInputs() == std::vector<std::string>({ "Digital Piano MIDI 1", "USB MIDI Interface" }));
     CHECK(currentStandaloneAudioEngine() == "WASAPI");
     CHECK(!hasStandaloneAudioControlPanel());
 
     std::string err;
     CHECK(selectStandaloneAudioEngine("ASIO", &err));
     CHECK(currentStandaloneAudioEngine() == "ASIO");
-    CHECK(currentStandaloneAudioDevice() == "ASIO4ALL v2");
+    CHECK(currentStandaloneAudioDevice() == "Generic Low Latency ASIO");
     CHECK(hasStandaloneAudioControlPanel());
-    CHECK(selectStandaloneAudioDevice("Focusrite USB ASIO", &err));
-    CHECK(currentStandaloneAudioDevice() == "Focusrite USB ASIO");
+    CHECK(selectStandaloneAudioDevice("USB Audio ASIO", &err));
+    CHECK(currentStandaloneAudioDevice() == "USB Audio ASIO");
     CHECK(openStandaloneAudioControlPanel() && controlPanelOpened);
 
     CHECK(!selectStandaloneAudioEngine("Unknown", &err) && !err.empty());
