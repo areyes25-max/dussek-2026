@@ -4714,3 +4714,29 @@ either plugin. DPF builds both: CMake's `CMAKE_OSX_ARCHITECTURES` and its `au` f
   on the installed components.
 
 Not tried by hand: an Intel Mac, Logic Pro, GarageBand.
+
+<a id="step-259"></a>
+## 259. The third-party notices
+
+The releases carried the project's own `LICENSE.txt` only. The libraries built into the plugins and standalones are
+under licenses that ask for their notice beside every copy of a binary (DPF's `LICENSING.md`: "DPF itself needs to be
+mentioned in attribution"), and none was there: DPF (ISC), pugl (ISC), NanoVG and fontstash (zlib), stb (MIT or public
+domain), the DejaVu Sans font DPF embeds (`loadSharedResources`; Bitstream Vera's license), RtAudio and RtMidi (MIT, the
+standalones), the LV2 (ISC) and CLAP (MIT) headers, libSOFD (MIT, Linux's file dialog), Rust's standard library and the
+engine's crates (mostly MIT or Apache-2.0; hound Apache-2.0, tiny-skia BSD-3, arrayref BSD-2, midly the Unlicense), and
+on Windows MinGW's winpthreads (linked in by `-static`). VST3 and AU are DPF's own code.
+
+- **`packaging/notices.py <platform> <out>`** writes `THIRD-PARTY-NOTICES.txt` from the sources: DPF's parts from the
+  submodule's files (a C header's first comment where the license is there), the crates from `cargo metadata
+  --filter-platform` (the engine's normal dependencies for the platform's targets, macOS both chips: 70 crates on
+  Linux, 69 on macOS) and each crate's own license files in cargo's registry (of "MIT OR Apache-2.0" its MIT file,
+  with any NOTICE), winpthreads from MSYS2's `share/licenses`. The CLAP headers' text and Rust's standard library's
+  have no file in the tree: `packaging/notices/`. A crate without a license file stops it, unless its license is a
+  public-domain dedication (midly ships none).
+- **Where it goes.** `package.sh` puts it beside `LICENSE.txt` in every portable folder (so the archives and the
+  installers carry it); the Windows installer beside the program, the macOS package in `/Library/Application
+  Support/Dussek` (a component with the instruments, always installed); each platform's install check looks for it.
+  The site writes every platform's (`third-party-notices.txt`, linked from Credits); the About tab names the file.
+- **Tests.** `proto/tests/test_notices.py`: every crate the engine links has a section with its text, DPF's parts are
+  named (libSOFD on Linux only), a crate without a file fails, of MIT or Apache the MIT file is kept;
+  `test_site_build.py` the Credits link; `ui_tests` the About tab's line (353 tests, 0 failed checks).

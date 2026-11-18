@@ -26,6 +26,7 @@ run /COMPONENTS="lv2,clap"
 [ -e "$cf/LV2/dussek.lv2" ] && [ -e "$cf/CLAP/dussek.clap" ] || fail "plugins missing"
 [ ! -e "$cf/VST3/dussek.vst3" ] && [ ! -e "$pf/Dussek/dussek.exe" ] || fail "an unchosen component was installed"
 [ -e "$pd/Dussek/instruments/harp/data.bin" ] || fail "the instruments are missing without the standalone"
+[ -s "$pf/Dussek/THIRD-PARTY-NOTICES.txt" ] || fail "the third-party notices are missing"
 for f in "$cf/LV2/weidinger.lv2" "$cf/CLAP/weidinger.clap" "$pd/Dussek/instruments/trumpet"; do
     [ ! -e "$f" ] || fail "Weidinger unchosen, yet installed: $f"
 done

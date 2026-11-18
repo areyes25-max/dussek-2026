@@ -18,6 +18,9 @@ break is allowed but listed under "Breaking" (`docs/compatibility.md`).
 
 ### Fixed
 
+- Every download carries THIRD-PARTY-NOTICES.txt: the licenses of the libraries built into the
+  plugins and standalones (DPF and what it builds in, RtAudio, RtMidi, the engine's Rust crates),
+  which earlier releases left out. The About tab and the website's Credits page point to it.
 - macOS: with Dussek and Weidinger loaded in one host, their windows ran one plugin's window code
   for both (DPF's window classes, of the same name in each); each plugin now has its own.
 

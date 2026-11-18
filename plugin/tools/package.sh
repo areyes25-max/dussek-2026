@@ -4,7 +4,7 @@
 #   plugin/tools/package.sh <platform>   ->  dist/dussek-<version>-<platform>/ (its path printed last)
 # Both plugins, Dussek and Weidinger (the brass, a preview): the standalones, the LV2, CLAP and VST3
 # bundles as built (on macOS the AudioUnit too), every instrument's committed files (each plugin
-# lists its own), the license and README.txt; on Linux also install.sh, uninstall.sh, the desktop entries and the icon.
+# lists its own), the license, the third-party notices (packaging/notices.py) and README.txt; on Linux also install.sh, uninstall.sh, the desktop entries and the icon.
 # Run from the repository's root after `just plugin`.
 set -euo pipefail
 platform=${1:?usage: package.sh linux|macos|windows}
@@ -32,6 +32,7 @@ git ls-files -z instruments | while IFS= read -r -d '' f; do
     cp "$f" "$out/$f"
 done
 cp LICENSE "$out/LICENSE.txt"
+python3 packaging/notices.py "$platform" "$out/THIRD-PARTY-NOTICES.txt"
 commit=$(git describe --always --dirty 2>/dev/null || echo unknown)
 tested="The standalone, LV2, CLAP and VST3 are tested on Linux and Windows; the macOS build (its
 AudioUnit too) is untested (reports welcome). Where a host offers LV2 or CLAP, prefer them: the
@@ -82,6 +83,7 @@ experimental, and its sound and controls may still change.
 $how
 
 $tested
-The code is AGPL-3.0-or-later (LICENSE.txt); each instrument's license is in its folder.
+The code is AGPL-3.0-or-later (LICENSE.txt); the libraries built into it are in
+THIRD-PARTY-NOTICES.txt; each instrument's license is in its folder.
 TXT
 echo "$out"

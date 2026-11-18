@@ -158,6 +158,7 @@ jobs:
             mingw-w64-ucrt-x86_64-ninja
             mingw-w64-ucrt-x86_64-pkgconf
             mingw-w64-ucrt-x86_64-rust
+            mingw-w64-ucrt-x86_64-python
       - uses: taiki-e/install-action@v2
         with:
           tool: just

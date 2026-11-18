@@ -96,6 +96,12 @@ def test_performances_carry_their_license(site):
             assert "CC BY-NC-SA 4.0" in page[name_end:name_end + 200], f"{c['id']}: not marked where it is named"
 
 
+def test_credits_link_the_third_party_notices(site):
+    credits = (site / "credits.html").read_text()
+    assert 'href="third-party-notices.txt"' in credits
+    assert (site / "third-party-notices.txt").read_text().startswith("Dussek and Weidinger: third-party notices")
+
+
 def test_credits_name_every_instrument(site):
     page = open(f"{site}/credits.html", encoding="utf-8").read()
     for f in glob.glob(f"{P.REPO}/instruments/*/instrument.json"):

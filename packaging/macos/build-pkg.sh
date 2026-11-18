@@ -44,7 +44,9 @@ component() { # <name> <root> <install location> [scripts]
     pkgbuild --root "$2" --component-plist "$plist" --install-location "$3" \
         --identifier "de.ccoors.dussek.$1" --version "$version" ${4:+--scripts "$4"} "$work/pkgs/$1.pkg"
 }
-mkdir -p "$work/pkgs" "$work/instruments"
+mkdir -p "$work/pkgs" "$work/instruments" "$work/notices"
+# the license and the third-party notices beside the instruments, with them always
+cp "$src/LICENSE.txt" "$src/THIRD-PARTY-NOTICES.txt" "$work/notices/"
 cp -R "$src/instruments/." "$work/instruments/"
 # the brass with Weidinger only: installed after the instruments' package, whose preinstall empties the folder
 "$here/../split-brass.sh" "$work/instruments" "$work/brass"
@@ -53,6 +55,7 @@ component lv2 "$work/lv2" /Library/Audio/Plug-Ins/LV2
 component clap "$work/clap" /Library/Audio/Plug-Ins/CLAP
 component vst3 "$work/vst3" /Library/Audio/Plug-Ins/VST3
 component au "$work/au" /Library/Audio/Plug-Ins/Components
+component notices "$work/notices" "/Library/Application Support/Dussek"
 component instruments "$work/instruments" "/Library/Application Support/Dussek/instruments" "$here/scripts"
 component weidinger-app "$work/weidinger-app" /Applications
 component weidinger-lv2 "$work/weidinger-lv2" /Library/Audio/Plug-Ins/LV2

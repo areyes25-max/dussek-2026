@@ -74,6 +74,7 @@ Type: files; Name: "{autoprograms}\Weidinger.lnk"
 Source: "{#Source}\dussek.exe"; DestDir: "{app}"; Components: standalone; Flags: ignoreversion
 Source: "{#Source}\README.txt"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#Source}\LICENSE.txt"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#Source}\THIRD-PARTY-NOTICES.txt"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\icon\dussek.ico"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\icon\weidinger.ico"; DestDir: "{app}"; Components: weidinger and standalone; Flags: ignoreversion
 Source: "{#Source}\dussek.lv2\*"; DestDir: "{commoncf64}\LV2\dussek.lv2"; Components: lv2; Flags: ignoreversion recursesubdirs

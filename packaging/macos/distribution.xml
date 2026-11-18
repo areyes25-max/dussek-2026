@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Dussek's macOS package: the standalone and each plugin format as choices, the instruments
-     always; Weidinger (the winds, a preview) a choice with its standalone and formats under it, its
+     always (the license and the third-party notices with them); Weidinger (the winds, a preview) a choice with its standalone and formats under it, its
      instruments with it, installed after Dussek's (whose package empties the folder first) (build-pkg.sh). -->
 <installer-gui-script minSpecVersion="2">
     <title>Dussek</title>
@@ -39,6 +39,7 @@
     </choice>
     <choice id="instruments" title="The instruments" description="In /Library/Application Support/Dussek: the standalone and every plugin format play them." enabled="false" selected="true">
         <pkg-ref id="de.ccoors.dussek.instruments"/>
+        <pkg-ref id="de.ccoors.dussek.notices"/>
     </choice>
     <choice id="weidinger" title="Weidinger (a preview)" description="The winds: trumpet, horn, tenor and bass trombone, tuba and clarinet, physically modeled from the same sources. Its instruments go beside Dussek's.">
         <pkg-ref id="de.ccoors.dussek.brass"/>
@@ -64,6 +65,7 @@
     <pkg-ref id="de.ccoors.dussek.vst3">vst3.pkg</pkg-ref>
     <pkg-ref id="de.ccoors.dussek.au">au.pkg</pkg-ref>
     <pkg-ref id="de.ccoors.dussek.instruments">instruments.pkg</pkg-ref>
+    <pkg-ref id="de.ccoors.dussek.notices">notices.pkg</pkg-ref>
     <pkg-ref id="de.ccoors.dussek.brass">brass.pkg</pkg-ref>
     <pkg-ref id="de.ccoors.dussek.weidinger-app">weidinger-app.pkg</pkg-ref>
     <pkg-ref id="de.ccoors.dussek.weidinger-lv2">weidinger-lv2.pkg</pkg-ref>

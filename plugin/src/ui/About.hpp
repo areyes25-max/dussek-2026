@@ -10,6 +10,8 @@ namespace pe {
 constexpr const char* kProjectUrl = "https://github.com/ccoors/dussek";
 /// the plugin's license, in one line
 constexpr const char* kPluginLicenseLine = "Free software under the GNU Affero General Public License, version 3 or later (AGPL-3.0-or-later).";
+/// the libraries built in (packaging/notices.py writes their notices into every download)
+constexpr const char* kThirdPartyLine = "Built with DPF, pugl, NanoVG, RtAudio, RtMidi and Rust's crates: their licenses are in THIRD-PARTY-NOTICES.txt, in every download and on the website's Credits page.";
 
 /// the plugin's version: the project's in plugin/CMakeLists.txt (the hosts' too, getVersion)
 struct Version { uint32_t major, minor, patch; };

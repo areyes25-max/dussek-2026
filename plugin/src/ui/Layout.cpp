@@ -574,6 +574,7 @@ Layout computeLayout(float width, float height, Tab tab, const UiContext& ctx)
         line(std::string(identity(ctx.plugin).name) + " " + versionText(), LineStyle::Title);
         line(std::string("Built from commit ") + buildCommit(), LineStyle::Dim);
         line(kPluginLicenseLine, LineStyle::Dim);
+        line(kThirdPartyLine, LineStyle::Dim);
         // the link, its button at the right end (under it where they do not fit)
         y += kLineGap;
         const float bw = std::min(textWidth("Copy link") + 20, w), urlW = textWidth(kProjectUrl) + 8;

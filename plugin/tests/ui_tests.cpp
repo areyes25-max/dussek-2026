@@ -7077,6 +7077,8 @@ TEST(the_about_tab_lays_out_its_lines_in_the_content)
                 return std::any_of(l.aboutLines.begin(), l.aboutLines.end(), [&](const AboutLine& a) { return a.text.find(s) != std::string::npos; });
             };
             CHECK(has(buildCommit()) && has("AGPL-3.0-or-later") && has(entryOf(0).name) && has("Salamander"));
+            // the libraries built in: where their notices are
+            CHECK(has("THIRD-PARTY-NOTICES.txt"));
             CHECK(l.aboutLink.w > 0);
         }
     // the license scrolls in a small window

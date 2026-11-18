@@ -20,7 +20,8 @@ sudo mkdir -p "$lib/stale"
 sudo cp "$lib/harp/instrument.json" "$lib/harp/data.bin" "$lib/stale/"
 sudo installer -pkg "$pkg" -target / || fail "the update failed"
 
-for f in /Applications/Dussek.app "$plugins/LV2/dussek.lv2" "$plugins/CLAP/dussek.clap" "$plugins/VST3/dussek.vst3" \
+for f in "/Library/Application Support/Dussek/THIRD-PARTY-NOTICES.txt" "/Library/Application Support/Dussek/LICENSE.txt" \
+         /Applications/Dussek.app "$plugins/LV2/dussek.lv2" "$plugins/CLAP/dussek.clap" "$plugins/VST3/dussek.vst3" \
          "$plugins/Components/dussek.component" \
          /Applications/Weidinger.app "$plugins/LV2/weidinger.lv2" "$plugins/CLAP/weidinger.clap" "$plugins/VST3/weidinger.vst3" \
          "$plugins/Components/weidinger.component"; do

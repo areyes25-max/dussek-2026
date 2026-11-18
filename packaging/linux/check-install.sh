@@ -14,6 +14,9 @@ unset DUSSEK_INSTRUMENTS
 data="$XDG_DATA_HOME/dussek"
 fail() { echo "check-install: $*" >&2; exit 1; }
 
+# the archive's notices: every library built in (packaging/notices.py)
+grep -q "^DPF, the DISTRHO Plugin Framework" "$dist/THIRD-PARTY-NOTICES.txt" || fail "the third-party notices are missing"
+
 # the unpacked archive itself, nothing installed: its standalones play the instruments beside them, each its own
 "$dist/dussek" list | grep -q "^harp	.*$dist/instruments/harp" || fail "the archive's standalone does not find its instruments"
 "$dist/weidinger" list | grep -q "^trumpet	.*$dist/instruments/trumpet" || fail "the archive's Weidinger does not find its instruments"

@@ -18,6 +18,8 @@ import json
 import os
 import re
 import shutil
+import subprocess
+import sys
 
 import markdown
 
@@ -436,7 +438,12 @@ def credits_page(out):
 performances). {MAESTRO}</p>
 <p>The audio input's sound: a falling sound recorded by Christian Friedrich Coors, CC0.</p>
 <p>The typefaces: Inter (the Inter Project Authors) and Source Serif 4 (as "Dussek Serif"), both under the SIL Open
-Font License 1.1, served from this site.</p>'''
+Font License 1.1, served from this site.</p>
+<h2>The software</h2>
+<p>Dussek and Weidinger are free software under the GNU Affero General Public License 3.0. They are built with DPF (the
+DISTRHO Plugin Framework) and what it builds in (pugl, NanoVG, the DejaVu Sans font, RtAudio, RtMidi, the LV2 and CLAP
+headers) and the engine's Rust crates: their licenses are in <a href="third-party-notices.txt">third-party-notices.txt</a>,
+and every download carries its own copy, THIRD-PARTY-NOTICES.txt.</p>'''
     body = header("", "Credits") + f'<main class="doc credits"><h1>Credits</h1><p>Every instrument is measured from freely licensed recordings; each carries its license and the credits of what it was measured from.</p>{"".join(parts)}{site}</main>' + footer("")
     open(os.path.join(out, "credits.html"), "w", encoding="utf-8").write(
         page("Credits · Dussek", "The instruments' licenses and the recordings they were measured from", body, path="credits.html"))
@@ -470,6 +477,9 @@ def main():
         "Weidinger: physically modeled winds · Dussek", WEIDINGER, weidinger(manifest["clips"], v), "", "home weidinger",
         path="weidinger.html", icon="icon-weidinger.png"))
     credits_page(args.out)
+    # the libraries built into the downloads, every platform's (packaging/notices.py; the downloads carry their own)
+    subprocess.run([sys.executable, os.path.join(REPO, "packaging", "notices.py"), "all",
+                    os.path.join(args.out, "third-party-notices.txt")], check=True)
     open(os.path.join(args.out, "llms.txt"), "w", encoding="utf-8").write(llms_txt(v))
     urls = "".join(f"<url><loc>{SITE}{p}</loc></url>" for p in ("", "weidinger.html", "credits.html"))
     open(os.path.join(args.out, "sitemap.xml"), "w").write(

@@ -95,6 +95,9 @@ yourself, get the datasets first ([docs/getting-data.md](docs/getting-data.md)).
 ## Licenses
 
 - The code: [AGPL-3.0-or-later](LICENSE).
+- The libraries built into the plugins and standalones (DPF and what it builds in, RtAudio,
+  RtMidi, the engine's Rust crates): their licenses are in each download's
+  `THIRD-PARTY-NOTICES.txt` (`packaging/notices.py` writes it).
 - The instruments: each carries `instruments/<dir>/LICENSE.md` with its license and the credits
   of the recordings it was measured from. They are CC BY 4.0, except Upright C, which is
   CC BY-SA 4.0. An instrument made with a ShareAlike part (a borrowing, or a rolled piano's
