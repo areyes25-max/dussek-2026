@@ -1,49 +1,72 @@
+/*
+ * RtAudio Bridge for DPF (extended with Windows ASIO/DirectSound & device selection)
+ * Copyright (C) 2021-2025 Filipe Coelho <falktx@falktx.com>
+ * Copyright (C) 2026 Delio Siret <31051797+deliosiret@users.noreply.github.com>
+ *
+ * Permission to use, copy, modify, and/or distribute this software for any purpose with
+ * or without fee is hereby granted, provided that the above copyright notice and this
+ * permission notice appear in all copies.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH REGARD
+ * TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS. IN
+ * NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL
+ * DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER
+ * IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
+ * CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ */
+
 #ifndef RTAUDIO_BRIDGE_HPP_INCLUDED
 #define RTAUDIO_BRIDGE_HPP_INCLUDED
 
 #include "src/jackbridge/NativeBridge.hpp"
 #include "StandaloneAudio.hpp"
 
-#if defined(DISTRHO_OS_WINDOWS)
+#if defined(DISTRHO_OS_MAC)
+# define __MACOSX_CORE__
+# define RTAUDIO_API_TYPE MACOSX_CORE
+# define RTMIDI_API_TYPE MACOSX_CORE
+#elif defined(DISTRHO_OS_WINDOWS) && !defined(_MSC_VER)
 # define __WINDOWS_WASAPI__
 # define __WINDOWS_ASIO__
 # define __WINDOWS_DS__
 # define __WINDOWS_MM__
 # define RTAUDIO_API_TYPE WINDOWS_WASAPI
 # define RTMIDI_API_TYPE WINDOWS_MM
-#elif defined(DISTRHO_OS_MAC)
-# define __MACOSX_CORE__
-# define RTAUDIO_API_TYPE MACOSX_CORE
-# define RTMIDI_API_TYPE MACOSX_CORE
-#elif defined(DISTRHO_OS_LINUX)
-# if defined(HAVE_ALSA) && defined(HAVE_PULSEAUDIO)
+#else
+# if defined(HAVE_PULSEAUDIO) && !defined(DPF_JACK_STANDALONE_SKIP_PULSEAUDIO_FALLBACK)
 #  define __LINUX_PULSE__
-#  define __LINUX_ALSA__
 #  define RTAUDIO_API_TYPE LINUX_PULSE
-#  define RTMIDI_API_TYPE LINUX_ALSA
 # elif defined(HAVE_ALSA)
-#  define __LINUX_ALSA__
 #  define RTAUDIO_API_TYPE LINUX_ALSA
+# endif
+# ifdef HAVE_ALSA
+#  define __LINUX_ALSA__
 #  define RTMIDI_API_TYPE LINUX_ALSA
-# elif defined(HAVE_PULSEAUDIO)
-#  define __LINUX_PULSE__
-#  define RTAUDIO_API_TYPE LINUX_PULSE
-# else
-#  define __RTAUDIO_DUMMY__
-#  define __RTMIDI_DUMMY__
 # endif
 #endif
 
-#ifndef __RTMIDI_DUMMY__
+#if defined(RTMIDI_API_TYPE)
 # define DISTRHO_RTAUDIO_HAVE_MIDI 1
 #else
+# define __RTMIDI_DUMMY__
 # define DISTRHO_RTAUDIO_HAVE_MIDI 0
+#endif
+
+#ifndef RTAUDIO_API_TYPE
+# define __RTAUDIO_DUMMY__
+# define RTAUDIO_API_TYPE RTAUDIO_DUMMY
 #endif
 
 #define RTMIDI_DO_NOT_ENSURE_UNIQUE_PORTNAMES
 
+#ifdef DISTRHO_OS_MAC
+# define Point CocoaPoint
+#endif
 #include "rtaudio/RtAudio.h"
 #include "rtmidi/RtMidi.h"
+#ifdef DISTRHO_OS_MAC
+# undef Point
+#endif
 
 #if defined(DISTRHO_OS_WINDOWS)
 # include "asiodrivers.h"
@@ -196,7 +219,7 @@ struct RtAudioBridge : NativeBridge {
             {
                 try {
                     const RtAudio::DeviceInfo info = handle->getDeviceInfo(i);
-                    if (!info.name.empty() && (api == RtAudio::WINDOWS_ASIO || info.outputChannels > 0 || info.probed))
+                    if (!info.name.empty() && (api == RtAudio::WINDOWS_ASIO || info.outputChannels > 0))
                     {
                         if (std::find(names.begin(), names.end(), info.name) == names.end())
                             names.push_back(info.name);
@@ -213,7 +236,7 @@ struct RtAudioBridge : NativeBridge {
             {
                 try {
                     const RtAudio::DeviceInfo info = temp.getDeviceInfo(i);
-                    if (!info.name.empty() && (api == RtAudio::WINDOWS_ASIO || info.outputChannels > 0 || info.probed))
+                    if (!info.name.empty() && (api == RtAudio::WINDOWS_ASIO || info.outputChannels > 0))
                     {
                         if (std::find(names.begin(), names.end(), info.name) == names.end())
                             names.push_back(info.name);
@@ -714,7 +737,22 @@ struct RtAudioBridge : NativeBridge {
                 {
                     try {
                         const RtAudio::DeviceInfo info = rtaudio->getDeviceInfo(i);
-                        if (info.name == wantedDevice || std::strncmp(wantedDevice.c_str(), info.name.c_str(), 31) == 0)
+                        if (info.name == wantedDevice)
+                        {
+                            candidates.push_back(i);
+                            candidateNames.push_back(wantedDevice);
+                            break;
+                        }
+                    } catch (...) {}
+                }
+            }
+            if (candidates.empty() && api == RtAudio::WINDOWS_ASIO)
+            {
+                for (uint i = 0; i < devCount; ++i)
+                {
+                    try {
+                        const RtAudio::DeviceInfo info = rtaudio->getDeviceInfo(i);
+                        if (std::strncmp(wantedDevice.c_str(), info.name.c_str(), 31) == 0)
                         {
                             candidates.push_back(i);
                             candidateNames.push_back(wantedDevice);
@@ -832,7 +870,14 @@ struct RtAudioBridge : NativeBridge {
             } catch (...) {}
 
             RtAudio::StreamOptions opts;
-            opts.flags = RTAUDIO_NONINTERLEAVED | RTAUDIO_MINIMIZE_LATENCY | RTAUDIO_ALSA_USE_DEFAULT;
+            opts.flags = RTAUDIO_NONINTERLEAVED | RTAUDIO_ALSA_USE_DEFAULT;
+           #ifndef DISTRHO_OS_MAC
+            /* RtAudio in macOS uses a different than usual way to handle audio block size,
+             * where RTAUDIO_MINIMIZE_LATENCY makes CoreAudio use very low latencies (around 15 samples).
+             * That has serious performance drawbacks, so we skip that here.
+             */
+            opts.flags |= RTAUDIO_MINIMIZE_LATENCY;
+           #endif
             opts.streamName = clientName;
 
             chosenBuffer = nextBufferSize;

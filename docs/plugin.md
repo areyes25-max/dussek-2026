@@ -187,8 +187,11 @@ The header's buttons:
     points, the morph's partners and the Scala file stay (the Default preset clears them too).
 
 The selected tab, the zoom and the bottom's panel are saved with the session. The zoom last picked
-is also kept for the next window (`window.txt` in the config folder, beside the MIDI map): the
-standalone keeps no session. `plugin/build/ui_tests` tests the UI's logic without a window. The
+is kept for the next window (`window.txt` in the config folder, beside the MIDI map; the standalone
+also saves its window size and position, centered on screen on first launch). The standalone saves
+its last session (`session.txt` in the config folder, `weidinger-session.txt` for Weidinger:
+instrument, parameters, sound states and UI state) and restores it on launch.
+`plugin/build/ui_tests` tests the UI's logic without a window. The
 parameter table only grows from release to release ([compatibility.md](compatibility.md)).
 
 ## The header's controls
