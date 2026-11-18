@@ -623,7 +623,6 @@ private:
     bool fRestoringSession = false;
     bool fSessionLoaded = false;
     bool fSessionDirty = false;
-    uint64_t fSessionChangedMs = 0;
     WindowPlacementState fWindowPlacement {};
     bool fWindowPlacementDirty = false;
     uint64_t fWindowPlacementChangedMs = 0;
@@ -1475,10 +1474,8 @@ private:
 
     void markSessionDirty()
     {
-        if (!fRestoringSession && isStandalone() && fSessionLoaded) {
+        if (!fRestoringSession && isStandalone() && fSessionLoaded)
             fSessionDirty = true;
-            fSessionChangedMs = nowMs();
-        }
     }
 
     StandaloneSession captureStandaloneSession() const
@@ -1493,7 +1490,7 @@ private:
 
     void flushStandaloneSession()
     {
-        if (!isStandalone() || !fSessionLoaded)
+        if (!isStandalone() || !fSessionLoaded || !fSessionDirty)
             return;
         fSessionDirty = false;
         saveStandaloneSession(kKind, dataDirs().config, captureStandaloneSession());
@@ -1583,11 +1580,8 @@ private:
         }
         pollNotes();
         pollMirror();
-        if (isStandalone() && fSessionLoaded) {
+        if (isStandalone() && fSessionLoaded)
             pollWindowPlacement();
-            if (fSessionDirty && !tipBusy() && nowMs() - fSessionChangedMs >= 250)
-                flushStandaloneSession();
-        }
         // the armed Reset falls back after its 3 s
         if (fResetShown != resetArmed()) {
             fResetShown = resetArmed();
