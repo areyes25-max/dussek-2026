@@ -107,4 +107,10 @@ const char* const kMorphDownDescription = "Moves the instrument one place down t
                                           "and with it the mix where the point stays.";
 const char* const kMorphRemoveDescription = "Removes the instrument from the morph. The point goes to the middle (to the "
                                             "chosen instrument's corner when it was the last partner).";
+const char* const kAudioEngineTitle = "Audio engine";
+const char* const kAudioEngineDescription = "The standalone's audio driver backend (such as WASAPI, ASIO, or DirectSound on Windows). "
+                                            "Saved in your config folder and restored the next time the standalone starts.";
+const char* const kAudioDeviceTitle = "Audio device";
+const char* const kAudioDeviceDescription = "The output audio interface or driver used by the chosen audio engine. "
+                                            "When ASIO is active, the menu also offers the driver's ASIO control panel.";
 } // namespace pe

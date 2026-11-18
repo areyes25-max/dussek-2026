@@ -18,6 +18,7 @@
 #include "Numbers.hpp"
 #include "PedalMixer.hpp"
 #include "Presets.hpp"
+#include "StandaloneAudio.hpp"
 #include "Format.hpp"
 #include "Instruments.hpp"
 #include "Layout.hpp"
@@ -7617,3 +7618,199 @@ TEST(copy_cli_carries_the_brass_ties)
     CHECK(line.size() > tail.size() && line.compare(line.size() - tail.size(), tail.size(), tail) == 0);
     CHECK(midi2wavLine(v.data(), "/i/grand_a", 48000).find("--cc") == std::string::npos);
 }
+
+TEST(standalone_audio_engine_and_device_rows_appear_on_native_audio)
+{
+    UiContext hosted = ctxOf(0, 1, 0);
+    hosted.nativeAudio = false;
+    const Layout lh = computeLayout(kDefaultWidth, kDefaultHeight, kTabMidi, hosted);
+    CHECK(lh.audioEngine.w == 0 && lh.audioDevice.w == 0 && lh.rescanMidi.w == 0);
+
+    UiContext native = ctxOf(0, 1, 0);
+    native.nativeAudio = true;
+    const Layout ln = computeLayout(kDefaultWidth, kDefaultHeight, kTabMidi, native);
+    CHECK(ln.audioEngine.w > 0 && ln.audioDevice.w > 0 && ln.rescanMidi.w > 0);
+    CHECK(ln.audioEngine.y > ln.takeoverSwitch.y);
+    CHECK(ln.audioDevice.y > ln.audioEngine.y);
+    CHECK(ln.bufferChips[0].y > ln.audioDevice.y);
+    CHECK(ln.rescanMidi.y > ln.bufferChips[0].y);
+}
+
+TEST(standalone_audio_config_and_backend_dispatch)
+{
+    const StandaloneAudioConfig parsed = parseStandaloneAudioConfig(
+        "# comment\nengine = ASIO\ndevice = Focusrite USB ASIO\nbuffer = 256\n");
+    CHECK(parsed.engine == "ASIO");
+    CHECK(parsed.device == "Focusrite USB ASIO");
+    CHECK(parsed.bufferSize == 256u);
+
+    const std::string formatted = formatStandaloneAudioConfig(parsed);
+    const StandaloneAudioConfig roundtrip = parseStandaloneAudioConfig(formatted);
+    CHECK(roundtrip.engine == "ASIO");
+    CHECK(roundtrip.device == "Focusrite USB ASIO");
+    CHECK(roundtrip.bufferSize == 256u);
+
+    std::string activeEngine = "WASAPI";
+    std::string activeDevice = "Default";
+    bool controlPanelOpened = false;
+
+    StandaloneAudioBackend backend;
+    backend.getEngines = []() -> std::vector<std::string> {
+        return { "WASAPI", "ASIO", "DirectSound" };
+    };
+    backend.getCurrentEngine = [&]() { return activeEngine; };
+    backend.selectEngine = [&](const std::string& eng, std::string* err) {
+        if (eng != "WASAPI" && eng != "ASIO" && eng != "DirectSound") {
+            if (err) *err = "Unsupported engine";
+            return false;
+        }
+        activeEngine = eng;
+        activeDevice = (eng == "ASIO") ? "ASIO4ALL v2" : "Default";
+        return true;
+    };
+    backend.getDevices = [&]() -> std::vector<std::string> {
+        if (activeEngine == "ASIO")
+            return { "ASIO4ALL v2", "Focusrite USB ASIO" };
+        return { "Default", "Speakers (Realtek Audio)" };
+    };
+    backend.getCurrentDevice = [&]() { return activeDevice; };
+    backend.selectDevice = [&](const std::string& dev, std::string* err) {
+        const auto devs = backend.getDevices();
+        if (std::find(devs.begin(), devs.end(), dev) == devs.end()) {
+            if (err) *err = "Device not found";
+            return false;
+        }
+        activeDevice = dev;
+        return true;
+    };
+    backend.hasControlPanel = [&]() { return activeEngine == "ASIO"; };
+    backend.openControlPanel = [&]() {
+        if (activeEngine != "ASIO")
+            return false;
+        controlPanelOpened = true;
+        return true;
+    };
+    backend.getMidiInputs = []() -> std::vector<std::string> {
+        return { "Yamaha CVP-208-1", "Focusrite USB MIDI" };
+    };
+
+    setStandaloneAudioBackend(backend);
+    CHECK(hasStandaloneAudioBackend());
+    CHECK(standaloneAudioEngines() == std::vector<std::string>({ "WASAPI", "ASIO", "DirectSound" }));
+    CHECK(standaloneMidiInputs() == std::vector<std::string>({ "Yamaha CVP-208-1", "Focusrite USB MIDI" }));
+    CHECK(currentStandaloneAudioEngine() == "WASAPI");
+    CHECK(!hasStandaloneAudioControlPanel());
+
+    std::string err;
+    CHECK(selectStandaloneAudioEngine("ASIO", &err));
+    CHECK(currentStandaloneAudioEngine() == "ASIO");
+    CHECK(currentStandaloneAudioDevice() == "ASIO4ALL v2");
+    CHECK(hasStandaloneAudioControlPanel());
+    CHECK(selectStandaloneAudioDevice("Focusrite USB ASIO", &err));
+    CHECK(currentStandaloneAudioDevice() == "Focusrite USB ASIO");
+    CHECK(openStandaloneAudioControlPanel() && controlPanelOpened);
+
+    CHECK(!selectStandaloneAudioEngine("Unknown", &err) && !err.empty());
+
+    setStandaloneAudioBackend({});
+    CHECK(!hasStandaloneAudioBackend());
+}
+
+TEST(window_placement_centering_clamping_and_persistence)
+{
+    int cx = 0, cy = 0;
+    centerWindowRect(0, 0, 1920, 1040, 916, 663, cx, cy);
+    CHECK(cx == (1920 - 916) / 2);
+    CHECK(cy == (1040 - 663) / 2);
+
+    int x = 1500, y = 800;
+    uint32_t w = 916, h = 663;
+    clampWindowRectToWorkArea(0, 0, 1920, 1040, x, y, w, h);
+    CHECK(x == 1920 - 916 && y == 1040 - 663 && w == 916 && h == 663);
+
+    const std::string dir = (std::filesystem::temp_directory_path() / "dussek-window-placement-test").string();
+    std::filesystem::remove_all(dir);
+
+    WindowPlacementState wp;
+    wp.zoom = 125;
+    wp.hasBounds = true;
+    wp.x = 240;
+    wp.y = 140;
+    wp.width = 1120;
+    wp.height = 780;
+    wp.maximized = true;
+    CHECK(saveWindowPlacement(dir, wp));
+
+    const WindowPlacementState loaded = loadWindowPlacement(dir);
+    CHECK(loaded.zoom == 125 && loaded.hasBounds);
+    CHECK(loaded.x == 240 && loaded.y == 140 && loaded.width == 1120 && loaded.height == 780 && loaded.maximized);
+
+    // saveZoom updates zoom without discarding the saved window geometry
+    CHECK(saveZoom(dir, 150));
+    const WindowPlacementState afterZoom = loadWindowPlacement(dir);
+    CHECK(afterZoom.zoom == 150 && afterZoom.hasBounds);
+    CHECK(afterZoom.x == 240 && afterZoom.y == 140 && afterZoom.width == 1120 && afterZoom.height == 780 && afterZoom.maximized);
+
+    std::filesystem::remove_all(dir);
+}
+
+TEST(standalone_session_persists_instrument_parameters_states_and_ui_controls)
+{
+    const std::string dir = (std::filesystem::temp_directory_path() / "dussek-standalone-session-test").string();
+    std::filesystem::remove_all(dir);
+
+    float values[kParamCount];
+    for (uint32_t i = 0; i < kParamCount; ++i)
+        values[i] = defaultOf(PluginKind::Keys, i);
+    values[kVolume] = -3.5f;
+    values[kConcertPitch] = 442.0f;
+    values[kHammerHardness] = 15.0f;
+
+    const std::vector<std::pair<std::string, std::string>> states = {
+        { "instrument", "upright_a" },
+        { "velocity_curve", "32:40,96:104" },
+        { "morph", "grand_a" },
+        { "felt", "0:60:+2" },
+        { "scale_file", "scales/werckmeister.scl" }
+    };
+
+    UiState ui;
+    ui.tab = kTabMidi;
+    ui.zoom = 125;
+    ui.diag = 2; // keyboard strip + spectrogram/partials analysis
+    ui.view = 1; // partials view
+    ui.lo = 40.0f;
+    ui.hi = 12000.0f;
+    ui.floorDb = -80.0f;
+
+    StandaloneSession saved;
+    saved.preset = presetFrom(PluginKind::Keys, "Session", PresetScope::All, 0, values, states);
+    saved.ui = formatUiState(ui);
+    saved.hasUi = true;
+    saved.feltOriginal = true;
+
+    CHECK(saveStandaloneSession(PluginKind::Keys, dir, saved));
+
+    StandaloneSession loaded;
+    CHECK(loadStandaloneSession(PluginKind::Keys, dir, loaded));
+    CHECK(loaded.hasUi && loaded.feltOriginal);
+    CHECK(presetStates(loaded.preset) == states);
+
+    const auto params = presetParams(PluginKind::Keys, loaded.preset);
+    CHECK_NEAR(params[kVolume].second, -3.5f, 1e-4f);
+    CHECK_NEAR(params[kConcertPitch].second, 442.0f, 1e-4f);
+    CHECK_NEAR(params[kHammerHardness].second, 15.0f, 1e-4f);
+
+    const UiState restoredUi = parseUiState(loaded.ui.c_str());
+    CHECK(restoredUi.tab == kTabMidi);
+    CHECK(restoredUi.zoom == 125);
+    CHECK(restoredUi.diag == 2);
+    CHECK(restoredUi.view == 1);
+    CHECK_NEAR(restoredUi.lo, 40.0f, 1e-3f);
+    CHECK_NEAR(restoredUi.hi, 12000.0f, 1e-3f);
+    CHECK_NEAR(restoredUi.floorDb, -80.0f, 1e-3f);
+
+    std::filesystem::remove_all(dir);
+}
+
+

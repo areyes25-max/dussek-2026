@@ -11,6 +11,12 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#endif
 
 namespace pe {
 const int kZoomSteps[8] = { 100, 125, 150, 175, 200, 250, 300, 400 };
@@ -149,25 +155,194 @@ int parseSavedZoom(const std::string& text)
     return 100;
 }
 
-int loadSavedZoom(const std::string& config)
+WindowPlacementState parseWindowPlacement(const std::string& text)
 {
-    if (config.empty())
-        return 100;
-    std::ifstream f(config + "/window.txt");
-    std::stringstream ss;
-    ss << f.rdbuf();
-    return parseSavedZoom(ss.str());
+    WindowPlacementState s;
+    s.zoom = parseSavedZoom(text);
+    bool hasX = false, hasY = false, hasW = false, hasH = false;
+    int x = 0, y = 0, w = 0, h = 0, max = 0;
+    std::istringstream in(text);
+    std::string line;
+    while (std::getline(in, line)) {
+        if (std::sscanf(line.c_str(), "x=%d", &x) == 1)
+            hasX = true;
+        else if (std::sscanf(line.c_str(), "y=%d", &y) == 1)
+            hasY = true;
+        else if (std::sscanf(line.c_str(), "width=%d", &w) == 1)
+            hasW = w > 0;
+        else if (std::sscanf(line.c_str(), "height=%d", &h) == 1)
+            hasH = h > 0;
+        else if (std::sscanf(line.c_str(), "maximized=%d", &max) == 1)
+            s.maximized = max != 0;
+    }
+    if (hasX && hasY && hasW && hasH) {
+        s.hasBounds = true;
+        s.x = x;
+        s.y = y;
+        s.width = (uint32_t)w;
+        s.height = (uint32_t)h;
+    }
+    return s;
 }
 
-bool saveZoom(const std::string& config, int zoom)
+std::string formatWindowPlacement(const WindowPlacementState& s)
+{
+    std::ostringstream out;
+    out << "zoom=" << parseSavedZoom("zoom=" + std::to_string(s.zoom)) << "\n";
+    if (s.hasBounds && s.width > 0 && s.height > 0) {
+        out << "x=" << s.x << "\n"
+            << "y=" << s.y << "\n"
+            << "width=" << s.width << "\n"
+            << "height=" << s.height << "\n"
+            << "maximized=" << (s.maximized ? 1 : 0) << "\n";
+    }
+    return out.str();
+}
+
+WindowPlacementState loadWindowPlacement(const std::string& config)
+{
+    if (config.empty())
+        return {};
+    std::ifstream f(config + "/window.txt");
+    if (!f)
+        return {};
+    std::stringstream ss;
+    ss << f.rdbuf();
+    return parseWindowPlacement(ss.str());
+}
+
+bool saveWindowPlacement(const std::string& config, const WindowPlacementState& s)
 {
     if (config.empty())
         return false;
     std::error_code ec;
     std::filesystem::create_directories(config, ec);
-    std::ofstream f(config + "/window.txt");
-    f << "zoom=" << zoom << "\n";
-    return (bool)f;
+    const std::string path = config + "/window.txt", tmp = path + ".tmp";
+    {
+        std::ofstream f(tmp, std::ios::trunc);
+        f << formatWindowPlacement(s);
+        if (!f)
+            return false;
+    }
+    std::filesystem::rename(tmp, path, ec);
+    if (ec) {
+        std::remove(tmp.c_str());
+        std::ofstream f(path, std::ios::trunc);
+        f << formatWindowPlacement(s);
+        return (bool)f;
+    }
+    return true;
+}
+
+void centerWindowRect(int workLeft, int workTop, int workRight, int workBottom, int winW, int winH, int& outX, int& outY)
+{
+    const int workW = std::max(1, workRight - workLeft);
+    const int workH = std::max(1, workBottom - workTop);
+    outX = workLeft + std::max(0, (workW - winW) / 2);
+    outY = workTop + std::max(0, (workH - winH) / 2);
+}
+
+void clampWindowRectToWorkArea(int workLeft, int workTop, int workRight, int workBottom, int& x, int& y, uint32_t& w, uint32_t& h)
+{
+    const int workW = std::max(1, workRight - workLeft);
+    const int workH = std::max(1, workBottom - workTop);
+    w = std::min<uint32_t>(w, (uint32_t)workW);
+    h = std::min<uint32_t>(h, (uint32_t)workH);
+    if (x + (int)w > workRight)
+        x = workRight - (int)w;
+    if (y + (int)h > workBottom)
+        y = workBottom - (int)h;
+    if (x < workLeft)
+        x = workLeft;
+    if (y < workTop)
+        y = workTop;
+}
+
+void applyWindowPlacementToNativeWindow(uintptr_t nativeWindowHandle, const WindowPlacementState& wp)
+{
+#ifdef _WIN32
+    HWND hwnd = reinterpret_cast<HWND>(nativeWindowHandle);
+    if (hwnd == nullptr || !IsWindow(hwnd))
+        return;
+    if (wp.hasBounds && wp.width > 0 && wp.height > 0) {
+        RECT rc { (LONG)wp.x, (LONG)wp.y, (LONG)(wp.x + (int)wp.width), (LONG)(wp.y + (int)wp.height) };
+        MONITORINFO mInfo {};
+        mInfo.cbSize = sizeof(mInfo);
+        int x = wp.x, y = wp.y;
+        uint32_t w = wp.width, h = wp.height;
+        if (GetMonitorInfo(MonitorFromRect(&rc, MONITOR_DEFAULTTONEAREST), &mInfo))
+            clampWindowRectToWorkArea(mInfo.rcWork.left, mInfo.rcWork.top, mInfo.rcWork.right, mInfo.rcWork.bottom, x, y, w, h);
+        if (IsZoomed(hwnd) || IsIconic(hwnd))
+            ShowWindow(hwnd, SW_RESTORE);
+        SetWindowPos(hwnd, nullptr, x, y, (int)w, (int)h, SWP_NOZORDER | SWP_NOACTIVATE);
+        if (wp.maximized)
+            ShowWindow(hwnd, SW_MAXIMIZE);
+        return;
+    }
+    MONITORINFO mInfo {};
+    mInfo.cbSize = sizeof(mInfo);
+    RECT winRect {};
+    if (GetMonitorInfo(MonitorFromWindow(hwnd, MONITOR_DEFAULTTOPRIMARY), &mInfo) && GetWindowRect(hwnd, &winRect)) {
+        int cx = 0, cy = 0;
+        centerWindowRect(mInfo.rcWork.left, mInfo.rcWork.top, mInfo.rcWork.right, mInfo.rcWork.bottom,
+                         winRect.right - winRect.left, winRect.bottom - winRect.top, cx, cy);
+        SetWindowPos(hwnd, nullptr, cx, cy, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+    }
+    if (wp.maximized)
+        ShowWindow(hwnd, SW_MAXIMIZE);
+#else
+    (void)nativeWindowHandle;
+    (void)wp;
+#endif
+}
+
+bool queryWindowPlacementFromNativeWindow(uintptr_t nativeWindowHandle, WindowPlacementState& wp)
+{
+#ifdef _WIN32
+    HWND hwnd = reinterpret_cast<HWND>(nativeWindowHandle);
+    if (hwnd == nullptr || !IsWindow(hwnd) || IsIconic(hwnd))
+        return false;
+    const bool max = IsZoomed(hwnd) != FALSE;
+    wp.maximized = max;
+    if (!max) {
+        RECT rc {};
+        if (GetWindowRect(hwnd, &rc) && rc.right > rc.left && rc.bottom > rc.top) {
+            wp.hasBounds = true;
+            wp.x = rc.left;
+            wp.y = rc.top;
+            wp.width = (uint32_t)(rc.right - rc.left);
+            wp.height = (uint32_t)(rc.bottom - rc.top);
+        }
+    } else if (!wp.hasBounds) {
+        WINDOWPLACEMENT wpl {};
+        wpl.length = sizeof(WINDOWPLACEMENT);
+        if (GetWindowPlacement(hwnd, &wpl) && wpl.rcNormalPosition.right > wpl.rcNormalPosition.left
+            && wpl.rcNormalPosition.bottom > wpl.rcNormalPosition.top) {
+            wp.hasBounds = true;
+            wp.x = wpl.rcNormalPosition.left;
+            wp.y = wpl.rcNormalPosition.top;
+            wp.width = (uint32_t)(wpl.rcNormalPosition.right - wpl.rcNormalPosition.left);
+            wp.height = (uint32_t)(wpl.rcNormalPosition.bottom - wpl.rcNormalPosition.top);
+        }
+    }
+    return wp.hasBounds;
+#else
+    (void)nativeWindowHandle;
+    (void)wp;
+    return false;
+#endif
+}
+
+int loadSavedZoom(const std::string& config)
+{
+    return loadWindowPlacement(config).zoom;
+}
+
+bool saveZoom(const std::string& config, int zoom)
+{
+    WindowPlacementState s = loadWindowPlacement(config);
+    s.zoom = zoom;
+    return saveWindowPlacement(config, s);
 }
 
 UiState initialUiState(const std::string& config)

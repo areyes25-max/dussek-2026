@@ -488,7 +488,12 @@ Layout computeLayout(float width, float height, Tab tab, const UiContext& ctx)
             y += kGap;
             l.subheadings.push_back({ "Audio and MIDI", { x, y, w, kSubheadH } });
             y += kSubheadH;
-            float cx = x + std::min(textWidth("Buffer") + 16, w * 0.3f);
+            l.audioEngine = { x, y, w, kLineH };
+            y += line;
+            l.audioDevice = { x, y, w, kLineH };
+            y += line;
+            const float audioLabelW = std::min(textWidth("Audio engine") + 8, w * 0.35f);
+            float cx = x + std::max(std::min(textWidth("Buffer") + 16, w * 0.3f), audioLabelW + 8);
             for (int i = 0; i < kBufferSizeCount; ++i) {
                 const float cw = std::min(textWidth("1024") + 16, std::max(1.0f, (x + w - cx) / (kBufferSizeCount - i) - kGap));
                 l.bufferChips[i] = { cx, y, cw, kLineH };

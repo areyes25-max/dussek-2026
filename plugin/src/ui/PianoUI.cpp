@@ -30,6 +30,7 @@
 #include "Params.hpp"
 #include "PedalMixer.hpp"
 #include "Presets.hpp"
+#include "StandaloneAudio.hpp"
 #include "Theme.hpp"
 #include "Tooltip.hpp"
 #include "StateVersion.hpp"
@@ -62,6 +63,7 @@ using namespace pe;
 
 /// the instrument menu's last entry
 static const char* const kOpenFolder = "Open instrument folder…";
+static const char* const kAsioControlPanel = "ASIO control panel…";
 
 class PianoUI : public UI
 {
@@ -104,6 +106,10 @@ public:
 
     ~PianoUI() override
     {
+        if (isStandalone() && fSessionLoaded) {
+            flushStandaloneSession();
+            flushWindowPlacement();
+        }
         fDiag.cancel();
         if (fLearnTarget >= 0)
             setDiag(kDiagLearnIn, 0.0f); // a closed UI leaves no control waiting: the DSP would keep the next CC
@@ -165,6 +171,7 @@ protected:
                 repaint(); // "building…" under the pad, "measuring…" under the felt's graph
             } else if (index == kDiagFeltOriginalOut) {
                 fFeltOriginal = value >= 0.5f; // what plays (this UI's click, another UI's, a fresh activation)
+                markSessionDirty();
                 repaint();
             }
             return; // the diagnostics never refresh the controls
@@ -174,63 +181,13 @@ protected:
             fDiag.setConcertPitch(value);
         if (index == kMorphX || index == kMorphY)
             askShippedFelt(); // the felt under the bends moves with the morph's point
+        markSessionDirty();
         changed(index);
         repaint();
     }
 
-    void stateChanged(const char* key, const char* value) override
+    void applyUiState(const UiState& st)
     {
-        // the host hands the UI the saved values as they were: migrated here as on the DSP side
-        // (the `ui` key is the UI's alone; StateVersion.hpp)
-        const std::string migrated = fRestore.apply(key, value != nullptr ? value : "");
-        if (std::strcmp(key, kStateVersionKey) == 0)
-            return;
-        value = migrated.c_str();
-        if (std::strcmp(key, "instrument") == 0) {
-            fChoice = choose(*fCatalog, value != nullptr ? value : "", kKind);
-            instrumentChanged();
-            return;
-        }
-        if (std::strcmp(key, "felt") == 0) {
-            if (fFeltDrag < 0) { // during a drag the host echoes what we set
-                PeFelt fe;
-                pe_felt_parse(value, &fe); // unreadable: none
-                fFelt.set(fe);
-            }
-            repaint();
-            return;
-        }
-        if (std::strcmp(key, "scale_file") == 0) {
-            fScaleFile = value != nullptr ? value : "";
-            repaint();
-            return;
-        }
-        if (std::strcmp(key, "morph") == 0) {
-            fMorphState = value != nullptr ? value : "";
-            askShippedFelt();
-            relayout();
-            repaint();
-            return;
-        }
-        if (std::strcmp(key, "velocity_curve") == 0) {
-            if (fCurveDrag < 0) { // during a drag the host echoes what we set
-                PeVelocityCurve c;
-                pe_velocity_curve_parse(value, &c); // unreadable: straight
-                fEdit.set(c);
-            }
-            repaint();
-            return;
-        }
-        if (std::strcmp(key, "ui") != 0)
-            return;
-        // a host's preset (DPF writes every state into the LV2 bundle's presets, this one at its default):
-        // the window stays as it is, and the plugin gets its state back
-        if (value != nullptr && formatUiState(UiState {}) == value) {
-            if (formatUiState(fState) != value)
-                saveState();
-            return;
-        }
-        const UiState st = parseUiState(value);
         const bool zoomChanged = st.zoom != fState.zoom;
         if (st.tab != fState.tab)
             fScroll = 0; // another tab: from its top, as a click on it
@@ -246,6 +203,67 @@ protected:
         }
         askShippedFelt(); // a session restored on the Felt tab
         repaint();
+    }
+
+    void stateChanged(const char* key, const char* value) override
+    {
+        // the host hands the UI the saved values as they were: migrated here as on the DSP side
+        // (the `ui` key is the UI's alone; StateVersion.hpp)
+        const std::string migrated = fRestore.apply(key, value != nullptr ? value : "");
+        if (std::strcmp(key, kStateVersionKey) == 0)
+            return;
+        value = migrated.c_str();
+        if (std::strcmp(key, "instrument") == 0) {
+            fChoice = choose(*fCatalog, value != nullptr ? value : "", kKind);
+            markSessionDirty();
+            instrumentChanged();
+            return;
+        }
+        if (std::strcmp(key, "felt") == 0) {
+            if (fFeltDrag < 0) { // during a drag the host echoes what we set
+                PeFelt fe;
+                pe_felt_parse(value, &fe); // unreadable: none
+                fFelt.set(fe);
+            }
+            markSessionDirty();
+            repaint();
+            return;
+        }
+        if (std::strcmp(key, "scale_file") == 0) {
+            fScaleFile = value != nullptr ? value : "";
+            markSessionDirty();
+            repaint();
+            return;
+        }
+        if (std::strcmp(key, "morph") == 0) {
+            fMorphState = value != nullptr ? value : "";
+            markSessionDirty();
+            askShippedFelt();
+            relayout();
+            repaint();
+            return;
+        }
+        if (std::strcmp(key, "velocity_curve") == 0) {
+            if (fCurveDrag < 0) { // during a drag the host echoes what we set
+                PeVelocityCurve c;
+                pe_velocity_curve_parse(value, &c); // unreadable: straight
+                fEdit.set(c);
+            }
+            markSessionDirty();
+            repaint();
+            return;
+        }
+        if (std::strcmp(key, "ui") != 0)
+            return;
+        // a host's preset (DPF writes every state into the LV2 bundle's presets, this one at its default):
+        // the window stays as it is, and the plugin gets its state back
+        if (value != nullptr && formatUiState(UiState {}) == value) {
+            if (formatUiState(fState) != value)
+                saveState();
+            return;
+        }
+        applyUiState(parseUiState(value));
+        markSessionDirty();
     }
 
     void uiScaleFactorChanged(double scaleFactor) override
@@ -607,6 +625,13 @@ private:
     CatalogPtr fCatalog; // the instruments found (Catalog.hpp)
     StateRestore fRestore; // the restored state's version (StateVersion.hpp)
     bool fTitled = false;  // the standalone's window title set (uiIdle)
+    bool fRestoringSession = false;
+    bool fSessionLoaded = false;
+    bool fSessionDirty = false;
+    uint64_t fSessionChangedMs = 0;
+    WindowPlacementState fWindowPlacement {};
+    bool fWindowPlacementDirty = false;
+    uint64_t fWindowPlacementChangedMs = 0;
     Choice fChoice;      // the "instrument" state: the id and its entry (nullptr: missing)
     UiState fState;
     Layout fLayout;
@@ -754,6 +779,8 @@ private:
         if (!std::isfinite(v) || v == fValues[i])
             return;
         fValues[i] = v;
+        if (i == kConcertPitch)
+            fDiag.setConcertPitch(v);
         setParameterValue(i, v);
         const uint32_t other = exclusiveStop(i);
         if (other < kParamCount && v >= 0.5f && fValues[other] >= 0.5f) {
@@ -761,6 +788,7 @@ private:
             setParam(other, 0.0f);
             editParameter(other, false);
         }
+        markSessionDirty();
         changed(i);
         repaint();
     }
@@ -797,6 +825,7 @@ private:
             if (kept.size() != before.size())
                 placeMorphPoint(morphPointAfter(before.size(), kept.size(), { fValues[kMorphX], fValues[kMorphY] }));
         }
+        markSessionDirty();
         instrumentChanged();
     }
 
@@ -874,7 +903,11 @@ private:
     static uint64_t nowMs() { return (uint64_t)std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
     WindowResizeTracker fWindowResize;
 
-    void saveState() { setState("ui", formatUiState(fState).c_str()); }
+    void saveState()
+    {
+        setState("ui", formatUiState(fState).c_str());
+        markSessionDirty();
+    }
 
     // the diagnostics at the window's bottom (window-logical coordinates, not scrolled)
     DiagView fDiag { DiagHost {
@@ -994,6 +1027,7 @@ private:
         }
         fScaleFile = path;
         setState("scale_file", path);
+        markSessionDirty();
         editParameter(kTemperament, true);
         setParam(kTemperament, (float)pe_temperament_count());
         editParameter(kTemperament, false);
@@ -1064,10 +1098,12 @@ private:
     int panicTip() const { return (int)fLayout.rows.size(); }
     int menuTip() const { return (int)fLayout.rows.size() + 1; }
     int curveTip() const { return (int)fLayout.rows.size() + 2; }
-    /// the MIDI tab's switches, then its rows
+    /// the MIDI tab's switches, standalone audio rows, then its rows
     int programTip() const { return (int)fLayout.rows.size() + 3; }
     int takeoverTip() const { return (int)fLayout.rows.size() + 4; }
-    int midiTip(size_t k) const { return (int)fLayout.rows.size() + 5 + (int)k; }
+    int audioEngineTip() const { return (int)fLayout.rows.size() + 5; }
+    int audioDeviceTip() const { return (int)fLayout.rows.size() + 6; }
+    int midiTip(size_t k) const { return (int)fLayout.rows.size() + 7 + (int)k; }
     /// the Morph tab's: 0 the plus, 1 the pad, then per row 2 + 4k + (0 the row, 1 up, 2 down, 3 remove)
     int morphTip(int i) const { return midiTip(fLayout.midiRows.size()) + i; }
 
@@ -1095,7 +1131,21 @@ private:
             drawTooltip(*this, box, kCurveTitle, kCurveDescription, kCurveGestures);
             return;
         }
-        if (fTipShown >= programTip() && (size_t)(fTipShown - programTip()) <= fLayout.midiRows.size() + 1) {
+        if (fTipShown == audioEngineTip() || fTipShown == audioDeviceTip()) {
+            const bool isEngine = fTipShown == audioEngineTip();
+            const Rect& a = isEngine ? fLayout.audioEngine : fLayout.audioDevice;
+            const char* title = isEngine ? kAudioEngineTitle : kAudioDeviceTitle;
+            const char* body = isEngine ? kAudioEngineDescription : kAudioDeviceDescription;
+            const char* gestures = "Click to choose";
+            const float vw = getWidth() / uiScale(), vh = viewHeight();
+            const float w = std::min(kTooltipW, vw - 8);
+            const Rect b = shown(a, true, fScroll);
+            const Rect box = tooltipRect(b, b.x + std::min(textWidth(title) + 8, b.w * 0.35f), w,
+                tooltipHeight(*this, w, title, body, gestures), vw, vh);
+            drawTooltip(*this, box, title, body, gestures);
+            return;
+        }
+        if (fTipShown >= programTip() && (size_t)(fTipShown - programTip()) <= fLayout.midiRows.size() + 3) {
             const bool program = fTipShown == programTip(), takeover = fTipShown == takeoverTip(), sw = program || takeover;
             const Rect a = program ? fLayout.programSwitch : takeover ? fLayout.takeoverSwitch : fLayout.midiRows[(size_t)(fTipShown - midiTip(0))].rect;
             const uint32_t target = sw ? kParamCount : midiTarget(fLayout.midiRows[(size_t)(fTipShown - midiTip(0))]);
@@ -1429,13 +1479,101 @@ private:
         }
     }
 
+    bool isStandalone() const { return std::strcmp(getPluginFormatName(), "JACK/Standalone") == 0; }
+
+    void markSessionDirty()
+    {
+        if (!fRestoringSession && isStandalone() && fSessionLoaded) {
+            fSessionDirty = true;
+            fSessionChangedMs = nowMs();
+        }
+    }
+
+    StandaloneSession captureStandaloneSession() const
+    {
+        StandaloneSession s;
+        s.preset = presetFrom(kKind, "Session", PresetScope::All, bodyNow(), fValues, currentStates());
+        s.ui = formatUiState(fState);
+        s.hasUi = true;
+        s.feltOriginal = fFeltOriginal;
+        return s;
+    }
+
+    void flushStandaloneSession()
+    {
+        if (!isStandalone() || !fSessionLoaded)
+            return;
+        fSessionDirty = false;
+        saveStandaloneSession(kKind, dataDirs().config, captureStandaloneSession());
+    }
+
+    void pollWindowPlacement()
+    {
+        WindowPlacementState cur = fWindowPlacement;
+        cur.zoom = fState.zoom;
+        if (queryWindowPlacementFromNativeWindow(getWindow().getNativeWindowHandle(), cur)) {
+            if (cur.zoom != fWindowPlacement.zoom || cur.hasBounds != fWindowPlacement.hasBounds
+                || cur.x != fWindowPlacement.x || cur.y != fWindowPlacement.y
+                || cur.width != fWindowPlacement.width || cur.height != fWindowPlacement.height
+                || cur.maximized != fWindowPlacement.maximized) {
+                fWindowPlacement = cur;
+                fWindowPlacementDirty = true;
+                fWindowPlacementChangedMs = nowMs();
+            }
+        }
+        if (fWindowPlacementDirty && nowMs() - fWindowPlacementChangedMs >= 200) {
+            fWindowPlacementDirty = false;
+            saveWindowPlacement(dataDirs().config, fWindowPlacement);
+        }
+    }
+
+    void flushWindowPlacement()
+    {
+        if (!isStandalone() || !fSessionLoaded)
+            return;
+        WindowPlacementState cur = fWindowPlacement;
+        cur.zoom = fState.zoom;
+        if (queryWindowPlacementFromNativeWindow(getWindow().getNativeWindowHandle(), cur))
+            fWindowPlacement = cur;
+        fWindowPlacementDirty = false;
+        saveWindowPlacement(dataDirs().config, fWindowPlacement);
+    }
+
+    void restoreStandaloneSession()
+    {
+        fRestoringSession = true;
+        fWindowPlacement = loadWindowPlacement(dataDirs().config);
+        StandaloneSession s;
+        if (loadStandaloneSession(kKind, dataDirs().config, s)) {
+            applyPreset(s.preset);
+            if (s.feltOriginal != fFeltOriginal) {
+                fFeltOriginal = s.feltOriginal;
+                setDiag(kDiagFeltOriginalIn, panicNext(fValues[kDiagFeltOriginalIn]));
+            }
+            if (s.hasUi) {
+                const UiState st = parseUiState(s.ui.c_str());
+                applyUiState(st);
+                saveState();
+            }
+        }
+        fWindowPlacement.zoom = fState.zoom;
+        applyWindowPlacementToNativeWindow(getWindow().getNativeWindowHandle(), fWindowPlacement);
+        queryWindowPlacementFromNativeWindow(getWindow().getNativeWindowHandle(), fWindowPlacement);
+        saveWindowPlacement(dataDirs().config, fWindowPlacement);
+        fRestoringSession = false;
+        fSessionLoaded = true;
+        fSessionDirty = false;
+    }
+
     void uiIdle() override
     {
         // the standalone's window: the plugin's name alone (DPF titles it "maker: name")
         if (!fTitled) {
             fTitled = true;
-            if (std::strcmp(getPluginFormatName(), "JACK/Standalone") == 0)
+            if (isStandalone()) {
                 getWindow().setTitle(identity(kKind).name);
+                restoreStandaloneSession();
+            }
         }
         // the worker rescanned the instrument folders (a new one appeared, as the editor's preview)
         if (const CatalogPtr c = sharedCatalog(resources()); c != fCatalog) {
@@ -1453,6 +1591,11 @@ private:
         }
         pollNotes();
         pollMirror();
+        if (isStandalone() && fSessionLoaded) {
+            pollWindowPlacement();
+            if (fSessionDirty && !tipBusy() && nowMs() - fSessionChangedMs >= 250)
+                flushStandaloneSession();
+        }
         // the armed Reset falls back after its 3 s
         if (fResetShown != resetArmed()) {
             fResetShown = resetArmed();
@@ -1768,6 +1911,7 @@ private:
         fLearnMenu = -1;
         fLearnPair = false;
         fMorphMenu = false;
+        fAudioMenu = 0;
     }
 
     /// shows group g's instruments beside the instrument menu's list
@@ -1797,6 +1941,32 @@ private:
 
     void clickList(Point2 p)
     {
+        if (fAudioMenu != 0) {
+            const int which = fAudioMenu;
+            fAudioMenu = 0;
+            if (fListRect.contains(p.x, p.y)) {
+                const int i = listRow(p.y);
+                if (i >= 0 && (size_t)i < fListItems.size()) {
+                    const std::string chosen = fListItems[(size_t)i];
+                    const Rect anchor = shown(which == 1 ? fLayout.audioEngine : fLayout.audioDevice, true, fScroll);
+                    if (which == 1) {
+                        std::string err;
+                        if (!selectStandaloneAudioEngine(chosen, &err))
+                            showNote("Audio engine", err.empty() ? "Could not switch audio engine." : err, anchor, 4000);
+                    } else if (chosen == kAsioControlPanel) {
+                        if (!openStandaloneAudioControlPanel())
+                            showNote("ASIO", "The driver's ASIO control panel could not be opened.", anchor, 4000);
+                    } else {
+                        std::string err;
+                        if (!selectStandaloneAudioDevice(chosen, &err))
+                            showNote("Audio device", err.empty() ? "Could not open audio device." : err, anchor, 4000);
+                    }
+                }
+            }
+            updateHover(fPointerX, fPointerY);
+            repaint();
+            return;
+        }
         if (fMorphMenu) { // the plus button's instruments
             fMorphMenu = false;
             if (fListRect.contains(p.x, p.y)) {
@@ -1930,6 +2100,7 @@ private:
     void commitCurve()
     {
         setState("velocity_curve", fEdit.text().c_str());
+        markSessionDirty();
         repaint();
     }
 
@@ -2103,6 +2274,7 @@ private:
     void commitFelt()
     {
         setState("felt", fFelt.text().c_str());
+        markSessionDirty();
         repaint();
     }
 
@@ -2119,6 +2291,7 @@ private:
         if (fLayout.feltOriginal.contains(p.x, p.y)) {
             fFeltOriginal = !fFeltOriginal; // shown at once; kDiagFeltOriginalOut confirms it
             setDiag(kDiagFeltOriginalIn, panicNext(fValues[kDiagFeltOriginalIn])); // a flip, as Panic's
+            markSessionDirty();
             repaint();
             return true;
         }
@@ -2278,7 +2451,7 @@ private:
     uint32_t fMirrorSeqs[kParamCount] {};
     float fInstrumentOut = 0;
 
-    bool listOpen() const { return fListParam >= 0 || fMenuList || fLearnMenu >= 0 || fMorphMenu; }
+    bool listOpen() const { return fListParam >= 0 || fMenuList || fLearnMenu >= 0 || fMorphMenu || fAudioMenu != 0; }
 
     void setDiag(uint32_t index, float v)
     {
@@ -2418,6 +2591,7 @@ private:
         ids = validPartners(ids, *fCatalog, fChoice.id);
         fMorphState = formatPartners(ids);
         setState("morph", fMorphState.c_str());
+        markSessionDirty();
         const Point2 here { fValues[kMorphX], fValues[kMorphY] }, there = morphPointAfter(before, ids.size(), here);
         if (there.x != here.x || there.y != here.y)
             placeMorphPoint(there);
@@ -2432,6 +2606,7 @@ private:
             fValues[i] = i == kMorphX ? c.x : c.y;
             setParameterValue(i, fValues[i]);
         }
+        markSessionDirty();
         repaint();
     }
 
@@ -2446,6 +2621,7 @@ private:
             setParameterValue(i, fValues[i]);
             editParameter(i, false);
         }
+        markSessionDirty();
         repaint();
     }
 
@@ -2557,6 +2733,23 @@ private:
             drawCompactRow(*this, r, c);
         }
         if (fLayout.rescanMidi.w > 0) { // the standalone on its own audio
+            const float audioLabelW = std::min(textWidth("Audio engine") + 8, fLayout.audioEngine.w * 0.35f);
+            for (int i = 0; i < 2; ++i) {
+                const Rect& s = i == 0 ? fLayout.audioEngine : fLayout.audioDevice;
+                if (s.w <= 0)
+                    continue;
+                const char* const title = i == 0 ? kAudioEngineTitle : kAudioDeviceTitle;
+                std::string val = i == 0 ? currentStandaloneAudioEngine() : currentStandaloneAudioDevice();
+                if (val.empty())
+                    val = "Default";
+                Row r { kParamCount, Kind::Dropdown, s };
+                r.compact = true;
+                r.label = { s.x, s.y, audioLabelW, s.h };
+                r.control = { s.x + audioLabelW + 8, s.y, std::max(1.0f, s.w - audioLabelW - 8), s.h };
+                r.value = r.control;
+                ControlLook c { title, val, 0.0f, true, fHotAudio == i + 1 || fAudioMenu == i + 1, false, nullptr };
+                drawCompactRow(*this, r, c);
+            }
             fontSize(theme::fontSize);
             fillColor(theme::dim);
             textAlign(ALIGN_LEFT | ALIGN_MIDDLE);
@@ -2570,13 +2763,71 @@ private:
                 drawToggle(*this, fLayout.bufferChips[i], c);
             }
             const MidiRow r { -1, kParamCount, fLayout.rescanMidi, fLayout.rescanButton };
-            drawMidiRow(*this, r, "MIDI inputs", isMIDIEnabled() ? "open (Rescan for ones plugged in since)" : "none open", "Rescan",
+            std::string midiStatus = isMIDIEnabled() ? "open (Rescan for ones plugged in since)" : "none open";
+            if (isMIDIEnabled()) {
+                const std::vector<std::string> ports = standaloneMidiInputs();
+                if (!ports.empty()) {
+                    midiStatus.clear();
+                    for (size_t i = 0; i < ports.size(); ++i) {
+                        if (i > 0)
+                            midiStatus += ", ";
+                        midiStatus += ports[i];
+                    }
+                }
+            }
+            drawMidiRow(*this, r, "MIDI inputs", midiStatus.c_str(), "Rescan",
                 false, false);
         }
     }
 
+    int fAudioMenu = 0; // 1: Audio engine dropdown, 2: Audio device dropdown
+    int fHotAudio = 0;  // 1: Audio engine hovered, 2: Audio device hovered
+
+    void openAudioMenu(int which)
+    {
+        fListParam = -1;
+        fSubGroup = fSubHot = fListHot = -1;
+        closeMenu();
+        fListItems.clear();
+        fListValues.clear();
+
+        const std::string cur = which == 1 ? currentStandaloneAudioEngine() : currentStandaloneAudioDevice();
+        if (which == 1) {
+            fListItems = standaloneAudioEngines();
+            if (fListItems.empty())
+                fListItems.push_back(cur.empty() ? "Default" : cur);
+        } else {
+            fListItems = standaloneAudioDevices();
+            if (fListItems.empty())
+                fListItems.push_back(cur.empty() ? "Default" : cur);
+            if (hasStandaloneAudioControlPanel())
+                fListItems.push_back(kAsioControlPanel);
+        }
+
+        fListSelected = -1;
+        const std::string match = cur.empty() ? "Default" : cur;
+        for (size_t i = 0; i < fListItems.size(); ++i)
+            if (fListItems[i] == match)
+                fListSelected = (int)i;
+
+        fAudioMenu = which;
+        const Rect& s = which == 1 ? fLayout.audioEngine : fLayout.audioDevice;
+        const float audioLabelW = std::min(textWidth("Audio engine") + 8, s.w * 0.35f);
+        const Rect ctrl { s.x + audioLabelW + 8, s.y, std::max(1.0f, s.w - audioLabelW - 8), s.h };
+        placeList(shown(ctrl, true, fScroll));
+        repaint();
+    }
+
     bool clickMidiTab(Point2 p)
     {
+        if (fLayout.audioEngine.w > 0 && fLayout.audioEngine.contains(p.x, p.y)) {
+            openAudioMenu(1);
+            return true;
+        }
+        if (fLayout.audioDevice.w > 0 && fLayout.audioDevice.contains(p.x, p.y)) {
+            openAudioMenu(2);
+            return true;
+        }
         if (fLayout.rescanButton.contains(p.x, p.y)) {
             if (supportsMIDI())
                 requestMIDI();
@@ -2681,7 +2932,7 @@ private:
             }
             return;
         }
-        if (fListParam >= 0 || fLearnMenu >= 0 || fMorphMenu) {
+        if (fListParam >= 0 || fLearnMenu >= 0 || fMorphMenu || fAudioMenu != 0) {
             const int h = fListRect.contains(w.x, w.y) ? listRow(w.y) : -1;
             if (h != fListHot) { fListHot = h; repaint(); }
             return;
@@ -2709,6 +2960,8 @@ private:
             if (fLayout.midiRows[k].rect.contains(p.x, p.y))
                 hotMidi = (int)k;
         const int hotSwitch = !inC ? 0 : fLayout.programSwitch.contains(p.x, p.y) ? 1 : fLayout.takeoverSwitch.contains(p.x, p.y) ? 2 : 0;
+        const int hotAudio = !inC ? 0 : (fLayout.audioEngine.w > 0 && fLayout.audioEngine.contains(p.x, p.y)) ? 1
+            : (fLayout.audioDevice.w > 0 && fLayout.audioDevice.contains(p.x, p.y)) ? 2 : 0;
         int hotMorph = -1;
         if (inC && tab() == kTabMorph) {
             if (fLayout.morphPlus.contains(p.x, p.y))
@@ -2724,8 +2977,11 @@ private:
         }
         const bool hotCopy = inC && tab() == kTabAbout && fLayout.aboutCopy.contains(p.x, p.y);
         if (hotCopy != fHotCopyLink) { fHotCopyLink = hotCopy; repaint(); }
-        if (hotMidi != fHotMidi || hotSwitch != fHotSwitch) { fHotMidi = hotMidi; fHotSwitch = hotSwitch; repaint(); }
+        if (hotMidi != fHotMidi || hotSwitch != fHotSwitch || hotAudio != fHotAudio) {
+            fHotMidi = hotMidi; fHotSwitch = hotSwitch; fHotAudio = hotAudio; repaint();
+        }
         fTip.hover(hotPanic ? panicTip() : hotMenu ? menuTip() : overCurve ? curveTip() : hotSwitch == 1 ? programTip() : hotSwitch == 2 ? takeoverTip()
+                : hotAudio == 1 ? audioEngineTip() : hotAudio == 2 ? audioDeviceTip()
                 : hotMidi >= 0 ? midiTip((size_t)hotMidi) : hotMorph >= 0 ? hotMorph : hotRow, nowMs());
         if (hotPanic != fHotPanic) { fHotPanic = hotPanic; repaint(); }
         if (hotMenu != fHotMenu) { fHotMenu = hotMenu; repaint(); }
