@@ -55,8 +55,9 @@ float displacementPitches(float metres)
 
 void keyHue(int key, float rgb[3])
 {
-    static const float stops[5][3] = { { 1.0f, 0.35f, 0.16f }, { 1.0f, 0.75f, 0.24f }, { 0.47f, 0.9f, 0.55f },
-                                       { 0.27f, 0.75f, 1.0f }, { 0.67f, 0.43f, 1.0f } };
+    // NA_Magicos: copper in the bass, through amber and gold, to champagne and pearl in the treble
+    static const float stops[5][3] = { { 0.86f, 0.42f, 0.2f }, { 1.0f, 0.62f, 0.22f }, { 1.0f, 0.78f, 0.34f },
+                                       { 1.0f, 0.88f, 0.6f }, { 0.96f, 0.93f, 0.84f } };
     const float x = std::clamp((float)key / 87.0f, 0.0f, 1.0f) * 4.0f;
     const int i = std::min((int)x, 3);
     const float f = x - (float)i;

@@ -3329,7 +3329,7 @@ TEST(viz_strings_and_shapes)
     CHECK(displacementPitches(-1e-4f) == displacementPitches(1e-4f));
     float lo[3], hi[3];
     keyHue(0, lo); keyHue(87, hi);
-    CHECK(lo[0] > lo[2] && hi[2] > hi[1]); // warm bass, cool treble
+    CHECK(lo[0] > lo[2] && hi[2] > lo[2] && hi[1] > lo[1]); // NA_Magicos: copper bass, paler gold to pearl in the treble
 }
 
 TEST(strip_interaction_never_leaves_a_note_on_across_random_sequences)

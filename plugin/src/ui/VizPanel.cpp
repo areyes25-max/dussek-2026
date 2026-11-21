@@ -124,7 +124,7 @@ void VizPanel::idle()
 void VizPanel::draw(NanoVG& vg)
 {
     if (!fOpen) return;
-    vg.beginPath(); vg.rect(fArea.x, fArea.y, fArea.w, fArea.h); vg.fillColor(Color(12, 14, 24)); vg.fill();
+    vg.beginPath(); vg.rect(fArea.x, fArea.y, fArea.w, fArea.h); vg.fillColor(Color(8, 6, 4, 0.82f)); vg.fill();
     vg.fontSize(theme::smallFont);
     if (!fAvailable) {
         vg.fillColor(theme::dim);
@@ -161,8 +161,8 @@ void VizPanel::drawStrings(NanoVG& vg, uint64_t now)
         const float top = fFront - len;
         // the idle string and its hitch pin
         vg.beginPath(); vg.moveTo(x, fFront); vg.lineTo(x, top);
-        vg.strokeColor(Color(70, 74, 88)); vg.strokeWidth(1); vg.stroke();
-        vg.beginPath(); vg.circle(x, top, 1.6f); vg.fillColor(Color(110, 100, 80)); vg.fill();
+        vg.strokeColor(Color(96, 74, 40)); vg.strokeWidth(1); vg.stroke();
+        vg.beginPath(); vg.circle(x, top, 1.6f); vg.fillColor(Color(212, 175, 90)); vg.fill();
         if (!key) continue;
         float amp[PE_VIZ_PARTIALS];
         const float level = combined(*key, amp);
@@ -216,7 +216,7 @@ void VizPanel::drawStrings(NanoVG& vg, uint64_t now)
         }
     }
     vg.beginPath(); vg.moveTo(fPlot.x, fFront); vg.lineTo(fPlot.x + fPlot.w, fFront);
-    vg.strokeColor(Color(90, 90, 100)); vg.strokeWidth(1); vg.stroke();
+    vg.strokeColor(Color(190, 150, 70)); vg.strokeWidth(1); vg.stroke();
 }
 
 void VizPanel::drawHammers(NanoVG& vg, uint64_t now)
@@ -238,10 +238,10 @@ void VizPanel::drawHammers(NanoVG& vg, uint64_t now)
             const float wt = s == 0 ? 1.0f : 0.25f + 0.15f * (float)(3 - s);
             if (s == 0) {
                 vg.beginPath(); vg.moveTo(x, y + 10); vg.lineTo(x, bottom);
-                vg.strokeColor(Color(120, 95, 70)); vg.strokeWidth(1.5f); vg.stroke();
+                vg.strokeColor(Color(150, 115, 55)); vg.strokeWidth(1.5f); vg.stroke();
             }
             vg.beginPath(); vg.roundedRect(x - pitch * 0.4f, y, pitch * 0.8f, 10, 3);
-            vg.fillColor(Color(225, 215, 195, wt)); vg.fill();
+            vg.fillColor(Color(240, 228, 200, wt)); vg.fill();
         }
     }
 }

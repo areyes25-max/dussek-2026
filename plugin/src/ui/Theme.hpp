@@ -3,9 +3,11 @@
 #include "Color.hpp"
 
 namespace pe::theme {
-inline const DGL_NAMESPACE::Color bg { 29, 31, 34 }, panel { 37, 40, 44 }, line { 51, 54, 59 };
-inline const DGL_NAMESPACE::Color text { 216, 218, 221 }, dim { 154, 160, 166 }, faint { 110, 115, 121 };
-inline const DGL_NAMESPACE::Color accent { 91, 154, 194 }, accentText { 156, 204, 228 };
-inline const DGL_NAMESPACE::Color wood { 58, 53, 48 }, woodEdge { 107, 96, 85 }, keys { 85, 85, 85 }, marker { 90, 94, 99 };
+// NA_Magicos: black and walnut, gold accents, ivory text; the panels let the cover art show through a little
+inline const DGL_NAMESPACE::Color bg { 10, 8, 6 }, panel { 24, 18, 12, 0.86f }, line { 70, 54, 30 };
+inline const DGL_NAMESPACE::Color text { 238, 228, 206 }, dim { 190, 170, 132 }, faint { 132, 114, 86 };
+inline const DGL_NAMESPACE::Color accent { 214, 172, 84 }, accentText { 244, 212, 140 };
+inline const DGL_NAMESPACE::Color wood { 70, 46, 24 }, woodEdge { 168, 128, 62 }, keys { 96, 80, 60 }, marker { 120, 98, 64 };
+inline const DGL_NAMESPACE::Color gold { 212, 175, 90 }, ivory { 242, 234, 214 }, ebony { 16, 12, 9 };
 constexpr float fontSize = 13, smallFont = 11, radius = 4, track = 4, knob = 7;
 }

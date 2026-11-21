@@ -24,6 +24,14 @@ con un `dussek.exe` 0.4.1, que no tiene `--background`, arma lo mismo con ffmpeg
 
 ![Vista con el arte de portada](vista-portada.png)
 
+## Interfaz en vivo NA_Magicos
+
+La ventana de Dussek usa la paleta del canal: negro y nogal, acentos dorados y texto marfil
+(`plugin/src/ui/Theme.hpp`); el pianista de fondo en el espacio libre (`CoverArt.inc`, sin textos);
+teclado de marfil y ébano con brillo, filo dorado en las negras y regla dorada; cuerdas de cobre a perla.
+
+![Interfaz en vivo](interfaz-en-vivo.png)
+
 ## Presets (`presets/`)
 
 Copiar a `%APPDATA%\Dussek\presets\` (Windows):

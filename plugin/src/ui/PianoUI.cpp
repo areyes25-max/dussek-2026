@@ -61,6 +61,8 @@ const unsigned long* DGL_X11_WINDOW_ICON_NAME = kPeWindowIcon;
 START_NAMESPACE_DISTRHO
 using namespace pe;
 
+#include "CoverArt.inc"
+
 /// the instrument menu's last entry
 static const char* const kOpenFolder = "Open instrument folder…";
 static const char* const kAsioControlPanel = "ASIO control panel…";
@@ -294,6 +296,7 @@ protected:
         glClear(GL_STENCIL_BUFFER_BIT);
         const float s = uiScale();
         beginPath(); rect(0, 0, getWidth(), getHeight()); fillColor(theme::bg); fill();
+        drawCoverArt();
         save();
         scale(s, s);
         scissor(0, 0, getWidth() / s, viewHeight()); // the controls' part: above the diagnostics
@@ -605,6 +608,38 @@ protected:
     }
 
 private:
+    /// NA_Magicos: the cover art behind the whole window (filling it, centered), under a veil that keeps
+    /// the controls readable; the panels over it are a little see-through (Theme.hpp)
+    void drawCoverArt()
+    {
+        if (!fCover && !fCoverFailed) {
+            fCover.reset(new NanoImage(createImageFromMemory(kCoverArt, (uint)sizeof(kCoverArt), 0)));
+            if (!fCover->isValid()) { fCover.reset(); fCoverFailed = true; }
+        }
+        if (!fCover) return;
+        const Size<uint> sz = fCover->getSize();
+        const float W = (float)getWidth(), H = (float)getHeight();
+        if (sz.getWidth() == 0 || sz.getHeight() == 0) return;
+        // the pianist in the free space at the lower right: his face (at 39 %, 26 % of the image) under the
+        // controls' right column, the image as tall as the window; to its left the background stays dark
+        const float ih = H * 0.95f, iw = ih * (float)sz.getWidth() / (float)sz.getHeight();
+        const float ox = W * 0.67f - 0.39f * iw, oy = H * 0.48f - 0.26f * ih;
+        beginPath(); rect(ox, oy, iw, ih);
+        fillPaint(imagePattern(ox, oy, iw, ih, 0, *fCover, 0.9f)); fill();
+        // its left and top edges fade into the background
+        beginPath(); rect(ox, 0, W * 0.18f, H);
+        fillPaint(linearGradient(ox, 0, ox + W * 0.18f, 0, theme::bg, Color(theme::bg, Color(0, 0, 0, 0.0f), 1.0f))); fill();
+        beginPath(); rect(0, oy, W, H * 0.15f);
+        fillPaint(linearGradient(0, oy, 0, oy + H * 0.15f, theme::bg, Color(theme::bg, Color(0, 0, 0, 0.0f), 1.0f))); fill();
+        // the veil: darker on the left, where most controls sit, lighter over the pianist on the right
+        beginPath(); rect(0, 0, W, H);
+        fillPaint(linearGradient(0, 0, W, 0, Color(0, 0, 0, 0.70f), Color(0, 0, 0, 0.12f))); fill();
+        beginPath(); rect(0, 0, W, H);
+        fillPaint(linearGradient(0, 0, 0, H, Color(0, 0, 0, 0.10f), Color(0, 0, 0, 0.45f))); fill();
+    }
+    std::unique_ptr<NanoImage> fCover;
+    bool fCoverFailed = false;
+
     float fValues[kRowCount] {}; // + the Instrument and Preset rows' (no parameters, always 0)
     // the Touch tab: the velocity curve (the "velocity_curve" state) as edited, the recent notes
     CurveEdit fEdit;

@@ -182,8 +182,8 @@ void DiagView::draw(NanoVG& vg)
     if (!strip) return;
 
     // reversed (many harpsichords): ebony naturals, bone sharps
-    const Color white = fReversedKeys ? Color(76, 68, 60) : Color(220, 222, 225);
-    const Color black = fReversedKeys ? Color(226, 218, 200) : Color(34, 36, 40);
+    const Color white = fReversedKeys ? Color(76, 68, 60) : theme::ivory;
+    const Color black = fReversedKeys ? Color(226, 218, 200) : theme::ebony;
     // extrapolated keys (beyond the recorded ones): an amber tint on either color
     const Color amber(204, 150, 84);
     for (int pass = 0; pass < 2; ++pass) // white keys, then black on top
@@ -199,8 +199,19 @@ void DiagView::draw(NanoVG& vg)
             if (l.held) c = mix(c, theme::accent, 0.85f);
             else if (l.ringing) c = mix(c, theme::accent, 0.35f);
             vg.beginPath(); vg.rect(s.r.x + 0.5f, s.r.y, std::max(0.5f, s.r.w - 1.0f), s.r.h - 1.0f);
-            vg.fillColor(c); vg.fill();
+            // a soft shine from the top, as lacquer and ivory catch the light
+            vg.fillPaint(vg.linearGradient(0, s.r.y, 0, s.r.y + s.r.h, mix(c, Color(255, 255, 255), s.black ? 0.10f : 0.25f), c));
+            vg.fill();
+            if (s.black && !l.held) { // a gold lip at the sharp's front edge
+                vg.beginPath(); vg.rect(s.r.x + 1.0f, s.r.y + s.r.h - 3.0f, std::max(0.5f, s.r.w - 2.0f), 1.2f);
+                vg.fillColor(Color(theme::gold, Color(0, 0, 0), 0.35f)); vg.fill();
+            }
         }
+    if (!fStrip.keys.empty()) { // the fallboard's gold rule over the keys
+        float x0 = 1e9f, x1 = -1e9f, y = 1e9f;
+        for (const KeyShape& s : fStrip.keys) { x0 = std::min(x0, s.r.x); x1 = std::max(x1, s.r.x + s.r.w); y = std::min(y, s.r.y); }
+        vg.beginPath(); vg.rect(x0, y - 1.5f, x1 - x0, 1.5f); vg.fillColor(theme::gold); vg.fill();
+    }
     // a pedal that acts: a slot with a lever at its depth, its name in the header row above
     const auto lever = [&](const Rect& r, float depth, const char* name) {
         if (r.w <= 0) return;
