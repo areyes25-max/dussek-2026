@@ -32,6 +32,13 @@ teclado de marfil y ébano con brillo, filo dorado en las negras y regla dorada;
 
 ![Interfaz en vivo](interfaz-en-vivo.png)
 
+## ASIO sin retraso (Windows)
+
+`instalar-asio.ps1` instala con winget los drivers gratuitos **ASIO4ALL** y **FlexASIO** desde sus fuentes
+oficiales y deja `%USERPROFILE%\FlexASIO.toml` (WASAPI compartido, 128 muestras, sin entrada). En Dussek:
+pestaña MIDI → Audio engine: ASIO → Audio device: ASIO4ALL v2 o FlexASIO. `compilar-dussek-na-magicos.ps1`
+compila esta versión en Windows con MSYS2 y llama al instalador si no hay drivers ASIO.
+
 ## Presets (`presets/`)
 
 Copiar a `%APPDATA%\Dussek\presets\` (Windows):
