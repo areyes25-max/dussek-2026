@@ -484,8 +484,9 @@ impl Painter {
         let s = (h / 1080.0).min(w / 1920.0);
         let margin = 40.0 * s;
         let pitch = (w - 2.0 * margin) / 88.0;
-        let keys_bottom = h - if shown.contains(&true) { 50.0 } else { 10.0 } * s;
-        let keys_y = keys_bottom - 120.0 * s;
+        // over an image the keys stand higher (clear of a video player's controls), a little shorter, no pedals
+        let keys_bottom = if image.is_some() { h - 130.0 * s } else { h - if shown.contains(&true) { 50.0 } else { 10.0 } * s };
+        let keys_y = keys_bottom - if image.is_some() { 105.0 } else { 120.0 } * s;
         let hammers_shown = !bars && first.keys.iter().any(|k| k.flags & KEY_HAMMER != 0);
         let front = if hammers_shown { keys_y - 110.0 * s } else { keys_y - 30.0 * s };
         let longest = first.keys.iter().map(|k| k.length).fold(0.0, f32::max);
@@ -523,7 +524,6 @@ impl Painter {
         out.data_mut().copy_from_slice(self.background.data());
         if self.keys_only {
             self.draw_keys(hammers, t, out);
-            self.draw_pedals(st.pedals, out);
             return;
         }
         glow.fill(Color::TRANSPARENT);
@@ -691,12 +691,13 @@ impl Painter {
             let x0 = wx[n - 1] + ww * 0.68;
             let held = hammers.held(n - 21, t).is_some();
             let fill = if held { color(self.pal.hue(n - 21), 0.75, 1.0) } else { self.pal.black };
-            if let Some(r) = Rect::from_xywh(x0, self.keys_y, ww * 0.62, 75.0 * s) {
+            let bh = 0.625 * (bottom - self.keys_y);
+            if let Some(r) = Rect::from_xywh(x0, self.keys_y, ww * 0.62, bh) {
                 out.fill_rect(r, &solid(fill), Transform::identity(), None);
             }
             if self.pal.theme == Theme::Deco && !held {
                 // ebony with a gold lip at its front edge
-                stroke_line(out, &[(x0 + 1.5 * s, self.keys_y + 73.0 * s), (x0 + ww * 0.62 - 1.5 * s, self.keys_y + 73.0 * s)], gold(0.55), 1.2 * s);
+                stroke_line(out, &[(x0 + 1.5 * s, self.keys_y + bh - 2.0 * s), (x0 + ww * 0.62 - 1.5 * s, self.keys_y + bh - 2.0 * s)], gold(0.55), 1.2 * s);
             }
         }
     }
@@ -836,17 +837,17 @@ fn image_background(px: &mut Pixmap, img: &Pixmap, w: f32, h: f32, s: f32, margi
     let (iw, ih) = (img.width() as f32, img.height() as f32);
     let k = (w / iw).max(h / ih);
     // raised a little: the image's bottom edge would lie under the keys anyway, its lower part kept in view
-    let (ox, oy) = ((w - iw * k) / 2.0, (h - ih * k) / 2.0 - 50.0 * s);
+    let (ox, oy) = ((w - iw * k) / 2.0, (h - ih * k) / 2.0 - 90.0 * s);
     px.fill(Color::from_rgba8(4, 3, 2, 255));
     let paint = tiny_skia::PixmapPaint { quality: tiny_skia::FilterQuality::Bicubic, ..tiny_skia::PixmapPaint::default() };
     px.draw_pixmap(0, 0, img.as_ref(), &paint, Transform::from_row(k, 0.0, 0.0, k, ox, oy), None);
-    // the shadow under the keys: from clear 50 px over the fallboard to dark at the bottom
-    let top = keys_y - 50.0 * s;
+    // the shadow under the keys: from clear 30 px over the fallboard to dark at the bottom
+    let top = keys_y - 30.0 * s;
     if let (Some(shader), Some(rect)) = (
         LinearGradient::new(
             Point::from_xy(0.0, top),
             Point::from_xy(0.0, keys_y),
-            vec![GradientStop::new(0.0, Color::from_rgba8(4, 3, 2, 0)), GradientStop::new(1.0, Color::from_rgba8(4, 3, 2, 235))],
+            vec![GradientStop::new(0.0, Color::from_rgba8(4, 3, 2, 0)), GradientStop::new(1.0, Color::from_rgba8(4, 3, 2, 255))],
             SpreadMode::Pad,
             Transform::identity(),
         ),

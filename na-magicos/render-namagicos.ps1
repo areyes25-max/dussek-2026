@@ -116,7 +116,8 @@ switch ($Video) {
     'Horizontal' {
         if ($usarFondo -and -not $fondoNativo) {
             # dussek.exe sin --background (0.4.1): el arte arriba y la franja de teclado del render abajo, con ffmpeg
-            $fc = "color=c=0x040302:s=1920x1080:r=$($Fps)[base];[1:v]scale=1920:1080[img];[base][img]overlay=0:-50[bg];[0:v]crop=1920:182:0:898[k];[bg][k]overlay=0:898:shortest=1[v]"
+            # el teclado mas arriba (termina 130 px sobre el borde): queda libre de la barra del reproductor
+            $fc = "color=c=0x040302:s=1920x1080:r=$($Fps)[base];[1:v]scale=1920:1080[img];[base][img]overlay=0:-90,drawbox=x=0:y=833:w=1920:h=247:color=0x040302@1:t=fill[bg];[0:v]crop=1840:120:40:910,scale=1840:105[k];[bg][k]overlay=40:845:shortest=1[v]"
             & ffmpeg -y -hide_banner -loglevel error -i $rawVideo -loop 1 -i $Fondo -i $wav -filter_complex $fc -map '[v]' -map 2:a:0 -c:v libx264 -preset medium -crf 18 -pix_fmt yuv420p -c:a aac -b:a 320k -shortest -movflags +faststart "$base.mp4"
         } else {
             & ffmpeg -y -hide_banner -loglevel error -i $rawVideo -i $wav -map 0:v:0 -map 1:a:0 -c:v copy -c:a aac -b:a 320k -shortest "$base.mp4"
