@@ -1,0 +1,13 @@
+# NA_Magicos preset: piano vertical apagado e intimo, para videos largos de ambiente (estudiar/dormir).
+# Medido sobre la demo 03-glass-rain: centroide 459 Hz, >4 kHz -54 dB (muy suave arriba).
+version = 1
+name = NA Magicos - Lofi intimo
+scope = all
+state.instrument = upright_c
+state.velocity_curve = 1:10,40:46,96:104,127:122
+param.mic_position = 1
+param.hammer_hardness = -18
+param.dynamics = 16
+param.room = -8
+param.knock = -3
+param.release = -8

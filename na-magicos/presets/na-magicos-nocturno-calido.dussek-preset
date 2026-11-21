@@ -1,0 +1,13 @@
+# NA_Magicos preset: piano de cola calido y cinematografico, para piezas lentas con el personaje.
+# Medido sobre la demo 03-glass-rain contra "Production, warm": menos brillo (2-4 kHz -4 dB, >4 kHz -4 dB).
+version = 1
+name = NA Magicos - Nocturno calido
+scope = all
+state.instrument = grand_b
+state.velocity_curve = 1:10,40:46,96:104,127:122
+param.mic_position = 2
+param.hammer_hardness = -4
+param.dynamics = 32
+param.sustain = 115
+param.sympathetic = 120
+param.release = -16

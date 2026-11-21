@@ -27,6 +27,94 @@ pub const DEFAULT_FFMPEG: &str = "-c:v libx264 -preset medium -crf 18 -pix_fmt y
 /// the same with `--transparent`: ProRes 4444 keeps the alpha (a .mov)
 pub const TRANSPARENT_FFMPEG: &str = "-c:v prores_ks -profile:v 4444 -pix_fmt yuva444p10le -c:a pcm_s16le";
 
+/// The picture's look: `Classic` the plugin's own, `Deco` black, gold and ivory (art deco)
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum Theme {
+    #[default]
+    Classic,
+    Deco,
+}
+
+impl std::str::FromStr for Theme {
+    type Err = String;
+    fn from_str(s: &str) -> std::result::Result<Self, String> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "classic" => Ok(Theme::Classic),
+            "deco" => Ok(Theme::Deco),
+            _ => Err("classic or deco".into()),
+        }
+    }
+}
+
+/// The colors a theme gives the picture.
+struct Palette {
+    theme: Theme,
+    bg: [Color; 2],
+    idle_string: Color,
+    pin: Color,
+    bar: Color,
+    front: Color,
+    shank: Color,
+    hammer: [u8; 3],
+    white: Color,
+    white_held_base: [f32; 3],
+    black: Color,
+    pedal_track: Color,
+    pedal: Color,
+}
+
+impl Palette {
+    fn of(theme: Theme) -> Self {
+        match theme {
+            Theme::Classic => Palette {
+                theme,
+                bg: [Color::from_rgba8(8, 10, 22, 255), Color::from_rgba8(18, 16, 26, 255)],
+                idle_string: Color::from_rgba8(70, 74, 88, 255),
+                pin: Color::from_rgba8(110, 100, 80, 255),
+                bar: Color::from_rgba8(46, 45, 52, 255),
+                front: Color::from_rgba8(90, 90, 100, 255),
+                shank: Color::from_rgba8(120, 95, 70, 255),
+                hammer: [225, 215, 195],
+                white: Color::from_rgba8(235, 232, 222, 255),
+                white_held_base: [0.92, 0.91, 0.87],
+                black: gray(22),
+                pedal_track: Color::from_rgba8(40, 42, 52, 255),
+                pedal: Color::from_rgba8(230, 170, 90, 255),
+            },
+            Theme::Deco => Palette {
+                theme,
+                bg: [Color::from_rgba8(5, 4, 3, 255), Color::from_rgba8(16, 11, 6, 255)],
+                idle_string: Color::from_rgba8(92, 72, 40, 255),
+                pin: Color::from_rgba8(212, 175, 90, 255),
+                bar: Color::from_rgba8(52, 40, 22, 255),
+                front: Color::from_rgba8(190, 150, 70, 255),
+                shank: Color::from_rgba8(150, 115, 55, 255),
+                hammer: [240, 228, 200],
+                white: Color::from_rgba8(240, 232, 212, 255),
+                white_held_base: [0.94, 0.9, 0.8],
+                black: Color::from_rgba8(14, 11, 8, 255),
+                pedal_track: Color::from_rgba8(40, 31, 18, 255),
+                pedal: Color::from_rgba8(222, 182, 92, 255),
+            },
+        }
+    }
+
+    /// key 0 = A0 … 87 = C8 (0 … 1 each channel)
+    fn hue(&self, key: usize) -> [f32; 3] {
+        match self.theme {
+            Theme::Classic => hue(key),
+            Theme::Deco => {
+                // copper in the bass, through amber and gold, to champagne and pearl in the treble
+                const STOPS: [[f32; 3]; 5] = [[0.86, 0.42, 0.2], [1.0, 0.62, 0.22], [1.0, 0.78, 0.34], [1.0, 0.88, 0.6], [0.96, 0.93, 0.84]];
+                let x = (key as f32 / 87.0).clamp(0.0, 1.0) * 4.0;
+                let i = (x as usize).min(3);
+                let f = x - i as f32;
+                std::array::from_fn(|c| STOPS[i][c] * (1.0 - f) + STOPS[i + 1][c] * f)
+            }
+        }
+    }
+}
+
 pub struct VideoOpts {
     pub path: String,
     pub width: u32,
@@ -36,6 +124,8 @@ pub struct VideoOpts {
     pub ffmpeg: Option<String>,
     /// no background: the frames' alpha for compositing
     pub transparent: bool,
+    /// the picture's look
+    pub theme: Theme,
 }
 
 /// "1920x1080" → (1920, 1080): even sides (most codecs need them), 64 … 8192
@@ -359,6 +449,7 @@ struct Painter {
     transparent: bool,
     background: Pixmap,
     sines: Box<Sines>,
+    pal: Palette,
 }
 
 /// a pedal's bar under the keys and the gap between two, at 1080p
@@ -372,7 +463,14 @@ pub fn shown_pedals(i: &Info) -> [bool; 3] {
 }
 
 impl Painter {
+    #[cfg_attr(not(test), allow(dead_code))] // the tests' classic painter
     fn new(width: u32, height: u32, bars: bool, transparent: bool, shown: [bool; 3], first: &State) -> Self {
+        Self::themed(width, height, bars, transparent, shown, first, Theme::Classic)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn themed(width: u32, height: u32, bars: bool, transparent: bool, shown: [bool; 3], first: &State, theme: Theme) -> Self {
+        let pal = Palette::of(theme);
         let (w, h) = (width as f32, height as f32);
         let s = (h / 1080.0).min(w / 1920.0);
         let margin = 40.0 * s;
@@ -386,7 +484,7 @@ impl Painter {
         let shader = LinearGradient::new(
             Point::from_xy(0.0, 0.0),
             Point::from_xy(0.0, h),
-            vec![GradientStop::new(0.0, Color::from_rgba8(8, 10, 22, 255)), GradientStop::new(1.0, Color::from_rgba8(18, 16, 26, 255))],
+            vec![GradientStop::new(0.0, pal.bg[0]), GradientStop::new(1.0, pal.bg[1])],
             SpreadMode::Pad,
             Transform::identity(),
         );
@@ -396,9 +494,12 @@ impl Painter {
             let paint = Paint { shader, ..Paint::default() };
             background.fill_rect(Rect::from_xywh(0.0, 0.0, w, h).unwrap(), &paint, Transform::identity(), None);
         } else {
-            background.fill(Color::from_rgba8(12, 13, 24, 255));
+            background.fill(pal.bg[1]);
         }
-        Painter { w, h, s, pitch, margin, keys_y, keys_bottom, shown, front, top: 60.0 * s, bars, hammers_shown, longest, transparent, background, sines: sines() }
+        if !transparent && theme == Theme::Deco {
+            deco_background(&mut background, w, h, s, margin, keys_y);
+        }
+        Painter { w, h, s, pitch, margin, keys_y, keys_bottom, shown, front, top: 60.0 * s, bars, hammers_shown, longest, transparent, background, sines: sines(), pal }
     }
 
     fn x(&self, k: usize) -> f32 {
@@ -427,11 +528,11 @@ impl Painter {
             let (a, b) = if self.bars { let mid = (field_top + field_bottom) / 2.0; (mid + len / 2.0, mid - len / 2.0) } else { (self.front, self.front - len) };
             let amp: [f32; VIZ_PARTIALS] = std::array::from_fn(|i| key.amp[i].hypot(RING_GAIN * key.ring[i]));
             let level = (0.5 * amp.iter().map(|x| x * x).sum::<f32>()).sqrt();
-            let c = hue(k);
+            let c = self.pal.hue(k);
             if self.bars {
                 let bw = self.pitch * 0.72;
                 if let Some(p) = rounded(x - bw / 2.0, b, bw, len, 3.0 * s) {
-                    out.fill_path(&p, &solid(Color::from_rgba8(46, 45, 52, 255)), FillRule::Winding, Transform::identity(), None);
+                    out.fill_path(&p, &solid(self.pal.bar), FillRule::Winding, Transform::identity(), None);
                 }
             } else {
                 // the idle string, where it does not ring (a ringing one is its band alone)
@@ -441,10 +542,10 @@ impl Painter {
                 if level <= SOUNDING
                     && let Some(p) = pb.finish()
                 {
-                    out.stroke_path(&p, &solid(Color::from_rgba8(70, 74, 88, 255)), &Stroke { width: s.max(1.0), ..Stroke::default() }, Transform::identity(), None);
+                    out.stroke_path(&p, &solid(self.pal.idle_string), &Stroke { width: s.max(1.0), ..Stroke::default() }, Transform::identity(), None);
                 }
                 if let Some(p) = PathBuilder::from_circle(x, b, 2.2 * s) {
-                    out.fill_path(&p, &solid(Color::from_rgba8(110, 100, 80, 255)), FillRule::Winding, Transform::identity(), None);
+                    out.fill_path(&p, &solid(self.pal.pin), FillRule::Winding, Transform::identity(), None);
                 }
             }
             if level > SOUNDING {
@@ -506,7 +607,7 @@ impl Painter {
             pb.move_to(self.margin, self.front);
             pb.line_to(self.w - self.margin, self.front);
             if let Some(p) = pb.finish() {
-                out.stroke_path(&p, &solid(Color::from_rgba8(90, 90, 100, 255)), &Stroke { width: s.max(1.0), ..Stroke::default() }, Transform::identity(), None);
+                out.stroke_path(&p, &solid(self.pal.front), &Stroke { width: s.max(1.0), ..Stroke::default() }, Transform::identity(), None);
             }
         }
         if self.hammers_shown {
@@ -534,12 +635,12 @@ impl Painter {
                     pb.move_to(x, y + 14.0 * s);
                     pb.line_to(x, self.keys_y - 8.0 * s);
                     if let Some(p) = pb.finish() {
-                        out.stroke_path(&p, &solid(Color::from_rgba8(120, 95, 70, 255)), &Stroke { width: 2.0 * s, ..Stroke::default() }, Transform::identity(), None);
+                        out.stroke_path(&p, &solid(self.pal.shank), &Stroke { width: 2.0 * s, ..Stroke::default() }, Transform::identity(), None);
                     }
                 }
                 // the earlier exposures see-through, fainter the older
                 if let Some(p) = rounded(x - self.pitch * 0.4, y, self.pitch * 0.8, 16.0 * s, 5.0 * s) {
-                    out.fill_path(&p, &solid(Color::from_rgba8(225, 215, 195, (255.0 * weight) as u8)), FillRule::Winding, Transform::identity(), None);
+                    out.fill_path(&p, &solid(Color::from_rgba8(self.pal.hammer[0], self.pal.hammer[1], self.pal.hammer[2], (255.0 * weight) as u8)), FillRule::Winding, Transform::identity(), None);
                 }
             }
         }
@@ -559,10 +660,11 @@ impl Painter {
             let fill = match held {
                 Some(v) => {
                     let f = 0.55 + 0.4 * (v as f32 / 5.0).min(1.0);
-                    let c = hue(n - 21);
-                    Color::from_rgba((0.92 * (1.0 - f) + c[0] * f).min(1.0), (0.91 * (1.0 - f) + c[1] * f).min(1.0), (0.87 * (1.0 - f) + c[2] * f).min(1.0), 1.0).unwrap()
+                    let c = self.pal.hue(n - 21);
+                    let b = self.pal.white_held_base;
+                    Color::from_rgba((b[0] * (1.0 - f) + c[0] * f).min(1.0), (b[1] * (1.0 - f) + c[1] * f).min(1.0), (b[2] * (1.0 - f) + c[2] * f).min(1.0), 1.0).unwrap()
                 }
-                None => Color::from_rgba8(235, 232, 222, 255),
+                None => self.pal.white,
             };
             let y0 = self.keys_y + if held.is_some() { 3.0 * s } else { 0.0 };
             if let Some(r) = Rect::from_xywh(x0 + 0.5 * s, y0, ww - 1.5 * s, bottom - y0) {
@@ -571,9 +673,14 @@ impl Painter {
         }
         for n in (21..=108).filter(|&n| black(n)) {
             let x0 = wx[n - 1] + ww * 0.68;
-            let fill = if hammers.held(n - 21, t).is_some() { color(hue(n - 21), 0.75, 1.0) } else { gray(22) };
+            let held = hammers.held(n - 21, t).is_some();
+            let fill = if held { color(self.pal.hue(n - 21), 0.75, 1.0) } else { self.pal.black };
             if let Some(r) = Rect::from_xywh(x0, self.keys_y, ww * 0.62, 75.0 * s) {
                 out.fill_rect(r, &solid(fill), Transform::identity(), None);
+            }
+            if self.pal.theme == Theme::Deco && !held {
+                // ebony with a gold lip at its front edge
+                stroke_line(out, &[(x0 + 1.5 * s, self.keys_y + 73.0 * s), (x0 + ww * 0.62 - 1.5 * s, self.keys_y + 73.0 * s)], gold(0.55), 1.2 * s);
             }
         }
     }
@@ -595,15 +702,115 @@ impl Painter {
         for (i, x) in self.pedal_bars() {
             let d = depth[i];
             if let Some(p) = rounded(x, y, w, h, h / 2.0) {
-                out.fill_path(&p, &solid(Color::from_rgba8(40, 42, 52, 255)), FillRule::Winding, Transform::identity(), None);
+                out.fill_path(&p, &solid(self.pal.pedal_track), FillRule::Winding, Transform::identity(), None);
             }
             if d > 0.01
                 && let Some(p) = rounded(x, y, w * d.clamp(0.0, 1.0), h, h / 2.0)
             {
-                out.fill_path(&p, &solid(Color::from_rgba8(230, 170, 90, 255)), FillRule::Winding, Transform::identity(), None);
+                out.fill_path(&p, &solid(self.pal.pedal), FillRule::Winding, Transform::identity(), None);
             }
         }
     }
+}
+
+/// gold as drawn on the deco background (its alpha a weight 0 … 1)
+fn gold(alpha: f32) -> Color {
+    Color::from_rgba(0.83, 0.68, 0.33, alpha.clamp(0.0, 1.0)).unwrap()
+}
+
+fn stroke_line(px: &mut Pixmap, pts: &[(f32, f32)], c: Color, width: f32) {
+    let mut pb = PathBuilder::new();
+    for (i, &(x, y)) in pts.iter().enumerate() {
+        if i == 0 { pb.move_to(x, y) } else { pb.line_to(x, y) }
+    }
+    if let Some(p) = pb.finish() {
+        px.stroke_path(&p, &solid(c), &Stroke { width, ..Stroke::default() }, Transform::identity(), None);
+    }
+}
+
+/// The deco theme's still background: a warm glow, a sunburst rising behind the strings, a double gold
+/// frame with stepped corners and a small crest at the top.
+fn deco_background(px: &mut Pixmap, w: f32, h: f32, s: f32, margin: f32, keys_y: f32) {
+    // the warm glow behind the strings
+    let (cx, cy) = (w / 2.0, keys_y * 0.55);
+    if let (Some(shader), Some(rect)) = (
+        RadialGradient::new(
+            Point::from_xy(cx, cy),
+            0.0,
+            Point::from_xy(cx, cy),
+            0.75 * w,
+            vec![GradientStop::new(0.0, Color::from_rgba8(78, 50, 16, 150)), GradientStop::new(1.0, Color::from_rgba8(78, 50, 16, 0))],
+            SpreadMode::Pad,
+            Transform::identity(),
+        ),
+        Rect::from_xywh(0.0, 0.0, w, h),
+    ) {
+        px.fill_rect(rect, &Paint { shader, anti_alias: true, ..Paint::default() }, Transform::identity(), None);
+    }
+    // the sunburst: thin rays fanning up from under the middle of the keys
+    let (ox, oy) = (w / 2.0, keys_y + 40.0 * s);
+    let reach = h * 1.3;
+    let rays = 36;
+    for i in 0..rays {
+        if i % 2 == 1 {
+            continue;
+        }
+        let a0 = std::f32::consts::PI * (1.0 + i as f32 / rays as f32);
+        let a1 = std::f32::consts::PI * (1.0 + (i as f32 + 1.0) / rays as f32);
+        let mut pb = PathBuilder::new();
+        pb.move_to(ox, oy);
+        pb.line_to(ox + reach * a0.cos(), oy + reach * a0.sin());
+        pb.line_to(ox + reach * a1.cos(), oy + reach * a1.sin());
+        pb.close();
+        if let (Some(p), Some(shader)) = (
+            pb.finish(),
+            RadialGradient::new(
+                Point::from_xy(ox, oy),
+                0.0,
+                Point::from_xy(ox, oy),
+                reach,
+                vec![GradientStop::new(0.0, gold(0.08)), GradientStop::new(0.6, gold(0.025)), GradientStop::new(1.0, gold(0.0))],
+                SpreadMode::Pad,
+                Transform::identity(),
+            ),
+        ) {
+            px.fill_path(&p, &Paint { shader, anti_alias: true, ..Paint::default() }, FillRule::Winding, Transform::identity(), None);
+        }
+    }
+    // the double frame
+    for (inset, width, alpha) in [(6.0, 1.6, 0.85), (11.0, 0.8, 0.55)] {
+        let i = inset * s;
+        stroke_line(px, &[(i, i), (w - i, i), (w - i, h - i), (i, h - i), (i, i)], gold(alpha), width * s);
+    }
+    // stepped corners, as on a deco doorway
+    // (the bottom ones short: the keys and pedals come close there)
+    for (sx, sy, dx, dy, k) in [(0.0, 0.0, 1.0, 1.0, 1.0), (w, 0.0, -1.0, 1.0, 1.0), (0.0, h, 1.0, -1.0, 0.4), (w, h, -1.0, -1.0, 0.4)] {
+        for (j, len) in [60.0f32 * k, 46.0 * k, 32.0 * k].iter().enumerate() {
+            let o = (17.0 + 5.0 * j as f32) * s;
+            let l = len * s;
+            stroke_line(px, &[(sx + dx * o, sy + dy * (o + l)), (sx + dx * o, sy + dy * o), (sx + dx * (o + l), sy + dy * o)], gold(0.75 - 0.15 * j as f32), 1.1 * s);
+        }
+    }
+    // the crest at the top: two rules and a diamond
+    let ty = 34.0 * s;
+    stroke_line(px, &[(w / 2.0 - 170.0 * s, ty), (w / 2.0 - 18.0 * s, ty)], gold(0.7), 1.0 * s);
+    stroke_line(px, &[(w / 2.0 + 18.0 * s, ty), (w / 2.0 + 170.0 * s, ty)], gold(0.7), 1.0 * s);
+    let d = 7.0 * s;
+    let mut pb = PathBuilder::new();
+    pb.move_to(w / 2.0, ty - d);
+    pb.line_to(w / 2.0 + d, ty);
+    pb.line_to(w / 2.0, ty + d);
+    pb.line_to(w / 2.0 - d, ty);
+    pb.close();
+    if let Some(p) = pb.finish() {
+        px.fill_path(&p, &solid(gold(0.9)), FillRule::Winding, Transform::identity(), None);
+    }
+    // the fallboard over the keys: a dark band edged in gold
+    if let Some(r) = Rect::from_xywh(margin - 6.0 * s, keys_y - 12.0 * s, w - 2.0 * margin + 12.0 * s, 12.0 * s) {
+        px.fill_rect(r, &solid(Color::from_rgba8(22, 15, 8, 255)), Transform::identity(), None);
+    }
+    stroke_line(px, &[(margin - 6.0 * s, keys_y - 12.0 * s), (w - margin + 6.0 * s, keys_y - 12.0 * s)], gold(0.9), 1.4 * s);
+    stroke_line(px, &[(margin - 6.0 * s, keys_y - 1.0 * s), (w - margin + 6.0 * s, keys_y - 1.0 * s)], gold(0.5), 0.8 * s);
 }
 
 fn radial(x: f32, y: f32, r: f32, c: Color, light: bool) -> Option<Shader<'static>> {
@@ -654,7 +861,7 @@ pub fn render(v: &VideoOpts, inst: &Instrument, shown: [bool; 3], tuning: Tuning
         State { keys, pedals: [engine.soft_depth(), if engine.sostenuto_down() { 1.0 } else { 0.0 }, engine.pedal_depth()] }
     };
     let first = capture(0, &mut engine);
-    let painter = Painter::new(v.width, v.height, inst.body().is_bars(), v.transparent, shown, &first);
+    let painter = Painter::themed(v.width, v.height, inst.body().is_bars(), v.transparent, shown, &first, v.theme);
     let cores = std::thread::available_parallelism().map_or(1, |n| n.get());
     let mut pixmaps: Vec<(Pixmap, Pixmap)> = (0..cores).map(|_| (Pixmap::new(v.width, v.height).unwrap(), Pixmap::new(v.width.div_ceil(4), v.height.div_ceil(4)).unwrap())).collect();
     // the writer feeds ffmpeg while the next batch is drawn
@@ -837,6 +1044,30 @@ mod tests {
         let lit = out.pixel(p.x(39) as u32, y as u32).unwrap();
         assert!(lit.alpha() > 40 && lit.red().max(lit.green()).max(lit.blue()) >= lit.alpha() - 1, "light: as bright as it is opaque");
         assert_eq!(alpha(p.margin + 2.0, p.keys_bottom - 2.0), 255, "a white key is solid");
+    }
+
+    #[test]
+    fn the_deco_theme_draws_gold_on_black() {
+        let mut st = State { keys: empty_keys(), pedals: [0.0, 1.0, 0.0] };
+        for (k, key) in st.keys.iter_mut().enumerate() {
+            key.length = 2.0 - 1.9 * k as f32 / 87.0;
+            key.flags = KEY_HAMMER | KEY_DAMPER;
+            key.engage = 1.0;
+        }
+        st.keys[39].amp[0] = 2e-3;
+        let h = hammers(&[(0.9, Event::NoteOn { key: 60, speed: 3.0 })]);
+        let p = Painter::themed(640, 360, false, false, [true; 3], &st, Theme::Deco);
+        let (mut out, mut glow) = (Pixmap::new(640, 360).unwrap(), Pixmap::new(160, 90).unwrap());
+        p.draw(&st, &h, 1.0, 30.0, 30, &mut out, &mut glow);
+        let px = |x: f32, y: f32| out.pixel(x as u32, y as u32).unwrap();
+        let frame = px(p.w / 2.0, 6.0 * p.s);
+        assert!(frame.red() > frame.blue() + 40, "the frame is gold");
+        let string = px(p.x(39), (p.front + p.top) / 2.0);
+        assert!(string.red() >= string.green() && string.green() > string.blue(), "a sounding string glows gold");
+        let white = px(p.margin + 2.0, p.keys_bottom - 2.0);
+        assert!(white.red() > 200 && white.blue() < white.red(), "the white keys are ivory");
+        assert!(out.pixels().iter().all(|c| c.alpha() == 255), "opaque");
+        assert!("deco".parse::<Theme>() == Ok(Theme::Deco) && "Classic".parse::<Theme>() == Ok(Theme::Classic) && "x".parse::<Theme>().is_err());
     }
 }
 
