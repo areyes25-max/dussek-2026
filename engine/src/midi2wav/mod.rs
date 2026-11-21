@@ -199,6 +199,9 @@ struct Cli {
     /// The picture's look: classic (the plugin's) or deco (black, gold and ivory)
     #[arg(long, value_name = "NAME", default_value = "classic", requires = "video", help_heading = "Video")]
     theme: video::Theme,
+    /// An image (PNG) as the whole background: only the keys and pedals drawn over it, at the bottom
+    #[arg(long, value_name = "IMAGE.png", requires = "video", help_heading = "Video")]
+    background: Option<String>,
 }
 
 fn number(s: &str) -> std::result::Result<f64, String> {
@@ -355,7 +358,7 @@ where
         morph: c.morph,
         felt: c.felt.unwrap_or_default(),
         input: c.input,
-        video: c.video.map(|path| video::VideoOpts { path, width: c.size.0, height: c.size.1, fps: c.fps, ffmpeg: c.ffmpeg, transparent: c.transparent, theme: c.theme }),
+        video: c.video.map(|path| video::VideoOpts { path, width: c.size.0, height: c.size.1, fps: c.fps, ffmpeg: c.ffmpeg, transparent: c.transparent, theme: c.theme, background: c.background }),
         cc: c.cc.map(|s| cc::parse(&s).unwrap()), // checked by the parser
         lowest_key: c.lowest_key.unwrap_or(0),
     };

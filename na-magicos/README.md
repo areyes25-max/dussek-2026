@@ -15,6 +15,15 @@ teclas de marfil y ébano con filo dorado. `--theme classic` (por defecto) deja 
 dussek render instruments/grand_b pieza.mid pieza.wav --video pieza.mp4 --theme deco
 ```
 
+## Video con el arte de portada
+
+`--background IMAGEN.png` (junto a `--video`) pone la imagen de fondo tal cual, cubriendo todo el cuadro, y dibuja
+encima solo el teclado y los pedales, sincronizados nota por nota. Con `--theme deco`, el teclado lleva filo dorado.
+`render-namagicos.ps1` lo usa por defecto en el video horizontal con `arte_portada_hd.png` (`-SinFondo` lo quita);
+con un `dussek.exe` 0.4.1, que no tiene `--background`, arma lo mismo con ffmpeg.
+
+![Vista con el arte de portada](vista-portada.png)
+
 ## Presets (`presets/`)
 
 Copiar a `%APPDATA%\Dussek\presets\` (Windows):

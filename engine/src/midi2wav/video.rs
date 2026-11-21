@@ -126,6 +126,8 @@ pub struct VideoOpts {
     pub transparent: bool,
     /// the picture's look
     pub theme: Theme,
+    /// an image (PNG) behind the keyboard, covering the picture: only the keys and pedals drawn on it
+    pub background: Option<String>,
 }
 
 /// "1920x1080" → (1920, 1080): even sides (most codecs need them), 64 … 8192
@@ -450,6 +452,8 @@ struct Painter {
     background: Pixmap,
     sines: Box<Sines>,
     pal: Palette,
+    /// an image as the background: the keys and pedals alone over it
+    keys_only: bool,
 }
 
 /// a pedal's bar under the keys and the gap between two, at 1080p
@@ -470,6 +474,11 @@ impl Painter {
 
     #[allow(clippy::too_many_arguments)]
     fn themed(width: u32, height: u32, bars: bool, transparent: bool, shown: [bool; 3], first: &State, theme: Theme) -> Self {
+        Self::with_image(width, height, bars, transparent, shown, first, theme, None)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn with_image(width: u32, height: u32, bars: bool, transparent: bool, shown: [bool; 3], first: &State, theme: Theme, image: Option<&Pixmap>) -> Self {
         let pal = Palette::of(theme);
         let (w, h) = (width as f32, height as f32);
         let s = (h / 1080.0).min(w / 1920.0);
@@ -496,10 +505,12 @@ impl Painter {
         } else {
             background.fill(pal.bg[1]);
         }
-        if !transparent && theme == Theme::Deco {
+        if let Some(img) = image {
+            image_background(&mut background, img, w, h, s, margin, keys_y, theme);
+        } else if !transparent && theme == Theme::Deco {
             deco_background(&mut background, w, h, s, margin, keys_y);
         }
-        Painter { w, h, s, pitch, margin, keys_y, keys_bottom, shown, front, top: 60.0 * s, bars, hammers_shown, longest, transparent, background, sines: sines(), pal }
+        Painter { w, h, s, pitch, margin, keys_y, keys_bottom, shown, front, top: 60.0 * s, bars, hammers_shown, longest, transparent, background, sines: sines(), pal, keys_only: image.is_some() }
     }
 
     fn x(&self, k: usize) -> f32 {
@@ -510,6 +521,11 @@ impl Painter {
     #[allow(clippy::too_many_arguments)]
     fn draw(&self, st: &State, hammers: &Hammers, t: f64, fps: f64, index: u64, out: &mut Pixmap, glow: &mut Pixmap) {
         out.data_mut().copy_from_slice(self.background.data());
+        if self.keys_only {
+            self.draw_keys(hammers, t, out);
+            self.draw_pedals(st.pedals, out);
+            return;
+        }
         glow.fill(Color::TRANSPARENT);
         let quarter = Transform::from_scale(glow.width() as f32 / self.w, glow.height() as f32 / self.h);
         let mut seed = index.wrapping_mul(0x9E37_79B9_7F4A_7C15) | 1;
@@ -813,6 +829,41 @@ fn deco_background(px: &mut Pixmap, w: f32, h: f32, s: f32, margin: f32, keys_y:
     stroke_line(px, &[(margin - 6.0 * s, keys_y - 1.0 * s), (w - margin + 6.0 * s, keys_y - 1.0 * s)], gold(0.5), 0.8 * s);
 }
 
+/// An image covering the picture (scaled to fill it, centered, cut at the sides or the top and bottom),
+/// darkened towards the keys so they stand out, with the deco fallboard over the keys.
+#[allow(clippy::too_many_arguments)]
+fn image_background(px: &mut Pixmap, img: &Pixmap, w: f32, h: f32, s: f32, margin: f32, keys_y: f32, theme: Theme) {
+    let (iw, ih) = (img.width() as f32, img.height() as f32);
+    let k = (w / iw).max(h / ih);
+    // raised a little: the image's bottom edge would lie under the keys anyway, its lower part kept in view
+    let (ox, oy) = ((w - iw * k) / 2.0, (h - ih * k) / 2.0 - 50.0 * s);
+    px.fill(Color::from_rgba8(4, 3, 2, 255));
+    let paint = tiny_skia::PixmapPaint { quality: tiny_skia::FilterQuality::Bicubic, ..tiny_skia::PixmapPaint::default() };
+    px.draw_pixmap(0, 0, img.as_ref(), &paint, Transform::from_row(k, 0.0, 0.0, k, ox, oy), None);
+    // the shadow under the keys: from clear 50 px over the fallboard to dark at the bottom
+    let top = keys_y - 50.0 * s;
+    if let (Some(shader), Some(rect)) = (
+        LinearGradient::new(
+            Point::from_xy(0.0, top),
+            Point::from_xy(0.0, keys_y),
+            vec![GradientStop::new(0.0, Color::from_rgba8(4, 3, 2, 0)), GradientStop::new(1.0, Color::from_rgba8(4, 3, 2, 235))],
+            SpreadMode::Pad,
+            Transform::identity(),
+        ),
+        Rect::from_xywh(0.0, top, w, h - top),
+    ) {
+        px.fill_rect(rect, &Paint { shader, anti_alias: true, ..Paint::default() }, Transform::identity(), None);
+    }
+    if theme == Theme::Deco {
+        if let Some(r) = Rect::from_xywh(margin - 6.0 * s, keys_y - 12.0 * s, w - 2.0 * margin + 12.0 * s, 12.0 * s) {
+            px.fill_rect(r, &solid(Color::from_rgba8(22, 15, 8, 255)), Transform::identity(), None);
+        }
+        stroke_line(px, &[(margin - 6.0 * s, keys_y - 12.0 * s), (w - margin + 6.0 * s, keys_y - 12.0 * s)], gold(0.9), 1.4 * s);
+        stroke_line(px, &[(margin - 6.0 * s, keys_y - 1.0 * s), (w - margin + 6.0 * s, keys_y - 1.0 * s)], gold(0.5), 0.8 * s);
+        stroke_line(px, &[(6.0 * s, h - 6.0 * s), (w - 6.0 * s, h - 6.0 * s)], gold(0.6), 1.0 * s);
+    }
+}
+
 fn radial(x: f32, y: f32, r: f32, c: Color, light: bool) -> Option<Shader<'static>> {
     let c = if light { as_light(c) } else { c };
     let mut clear = c;
@@ -861,7 +912,11 @@ pub fn render(v: &VideoOpts, inst: &Instrument, shown: [bool; 3], tuning: Tuning
         State { keys, pedals: [engine.soft_depth(), if engine.sostenuto_down() { 1.0 } else { 0.0 }, engine.pedal_depth()] }
     };
     let first = capture(0, &mut engine);
-    let painter = Painter::themed(v.width, v.height, inst.body().is_bars(), v.transparent, shown, &first, v.theme);
+    let image = match &v.background {
+        Some(path) => Some(Pixmap::load_png(path).map_err(|e| format!("--background: `{path}`: {e} (a PNG)"))?),
+        None => None,
+    };
+    let painter = Painter::with_image(v.width, v.height, inst.body().is_bars(), v.transparent, shown, &first, v.theme, image.as_ref());
     let cores = std::thread::available_parallelism().map_or(1, |n| n.get());
     let mut pixmaps: Vec<(Pixmap, Pixmap)> = (0..cores).map(|_| (Pixmap::new(v.width, v.height).unwrap(), Pixmap::new(v.width.div_ceil(4), v.height.div_ceil(4)).unwrap())).collect();
     // the writer feeds ffmpeg while the next batch is drawn
@@ -1067,6 +1122,15 @@ mod tests {
         let white = px(p.margin + 2.0, p.keys_bottom - 2.0);
         assert!(white.red() > 200 && white.blue() < white.red(), "the white keys are ivory");
         assert!(out.pixels().iter().all(|c| c.alpha() == 255), "opaque");
+        // an image as the background: the picture is the image above the keys, the keys still drawn
+        let mut img = Pixmap::new(64, 36).unwrap();
+        img.fill(Color::from_rgba8(200, 30, 30, 255));
+        let p = Painter::with_image(640, 360, false, false, [true; 3], &st, Theme::Deco, Some(&img));
+        p.draw(&st, &h, 1.0, 30.0, 30, &mut out, &mut glow);
+        let top = out.pixel(320, 60).unwrap();
+        assert!(top.red() > 150 && top.green() < 60, "the image fills the picture");
+        let white = out.pixel((p.margin + 2.0) as u32, (p.keys_bottom - 2.0) as u32).unwrap();
+        assert!(white.red() > 200 && white.green() > 180, "the keys are drawn over it");
         assert!("deco".parse::<Theme>() == Ok(Theme::Deco) && "Classic".parse::<Theme>() == Ok(Theme::Classic) && "x".parse::<Theme>().is_err());
     }
 }

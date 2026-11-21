@@ -7,6 +7,7 @@
 #   .\render-namagicos.ps1 -Midi .\pieza.mid -Fps 60              (mas fluido, tarda el doble)
 #   .\render-namagicos.ps1 -Midi .\pieza.mid -Pad -Limitar       (agrega pad bajo el piano; -PadDb -9 lo sube)
 #   .\render-namagicos.ps1 -Midi .\pieza.mid -Tema Clasico        (visual original; Deco requiere la version de tu fork)
+#   .\render-namagicos.ps1 -Midi .\pieza.mid -SinFondo            (sin el arte de portada: cuerdas animadas)
 param(
     [Parameter(Mandatory = $true)][string]$Midi,
     [ValidateSet('Nocturno', 'Lofi')][string]$Preset = 'Nocturno',
@@ -18,7 +19,9 @@ param(
     [switch]$Limitar,
     [switch]$Pad,
     [double]$PadDb = -11,
-    [ValidateSet('Deco', 'Clasico')][string]$Tema = 'Deco'
+    [ValidateSet('Deco', 'Clasico')][string]$Tema = 'Deco',
+    [string]$Fondo = "$PSScriptRoot\na-magicos\arte_portada_hd.png",
+    [switch]$SinFondo
 )
 
 [Console]::OutputEncoding = [Text.Encoding]::UTF8
@@ -56,12 +59,16 @@ switch ($Video) {
     'Short'        { $rawVideo = "$base.raw.mp4"; $a += @('--video', $rawVideo, '--size', '1080x960',  '--fps', "$Fps") }
     'Transparente' { $a += @('--video', "$base.mov", '--size', '1920x1080', '--fps', "$Fps", '--transparent') }
 }
+$ayuda = & $exe render --help 2>&1 | Out-String
 if ($Video -ne 'Ninguno' -and $Tema -eq 'Deco') {
     # El tema Art deco existe solo en la version NA_Magicos (tu fork): si este dussek.exe no lo conoce, usa el clasico
-    $ayuda = & $exe render --help 2>&1 | Out-String
     if ($ayuda -match '--theme') { $a += @('--theme', 'deco') }
     else { Write-Host "      Aviso: este dussek.exe no tiene el tema Deco (usa el de tu fork). Sigo con el visual clasico." -ForegroundColor Yellow }
 }
+# Arte de portada de fondo (solo video horizontal): la imagen tal cual, con el teclado sincronizado abajo
+$usarFondo = ($Video -eq 'Horizontal') -and (-not $SinFondo) -and (Test-Path $Fondo)
+$fondoNativo = $usarFondo -and ($ayuda -match '--background')
+if ($fondoNativo) { $a += @('--background', (Resolve-Path $Fondo).Path) }
 Write-Host "[1/3] Renderizando $name con '$Preset' ($inst)..." -ForegroundColor Cyan
 & $exe @a 2>&1 | ForEach-Object { Write-Host "      $_" }
 if ($LASTEXITCODE -ne 0 -or -not (Test-Path $raw)) { Fail "Dussek no pudo renderizar (codigo $LASTEXITCODE)" }
@@ -107,7 +114,13 @@ if (-not $Limitar -and ($Lufs - $inI) -gt (-1 - $inTP) + 0.5) { Write-Host "    
 Write-Host "[3/3] Armando el video..." -ForegroundColor Cyan
 switch ($Video) {
     'Horizontal' {
-        & ffmpeg -y -hide_banner -loglevel error -i $rawVideo -i $wav -map 0:v:0 -map 1:a:0 -c:v copy -c:a aac -b:a 320k -shortest "$base.mp4"
+        if ($usarFondo -and -not $fondoNativo) {
+            # dussek.exe sin --background (0.4.1): el arte arriba y la franja de teclado del render abajo, con ffmpeg
+            $fc = "color=c=0x040302:s=1920x1080:r=$($Fps)[base];[1:v]scale=1920:1080[img];[base][img]overlay=0:-50[bg];[0:v]crop=1920:182:0:898[k];[bg][k]overlay=0:898:shortest=1[v]"
+            & ffmpeg -y -hide_banner -loglevel error -i $rawVideo -loop 1 -i $Fondo -i $wav -filter_complex $fc -map '[v]' -map 2:a:0 -c:v libx264 -preset medium -crf 18 -pix_fmt yuv420p -c:a aac -b:a 320k -shortest -movflags +faststart "$base.mp4"
+        } else {
+            & ffmpeg -y -hide_banner -loglevel error -i $rawVideo -i $wav -map 0:v:0 -map 1:a:0 -c:v copy -c:a aac -b:a 320k -shortest "$base.mp4"
+        }
     }
     'Short' {
         if ($Personaje) {
