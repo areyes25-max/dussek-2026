@@ -49,9 +49,8 @@ public:
 private:
     void layout(const HomeModel& m);
     Rect fRect[home::Count] {};
-    float u = 1; // the scale: 1 at 1100 x 620
-    Rect fTop, fNav, fLeft, fRight, fAudio, fSmart, fBar, fStage, fFeature, fLogo;
-    std::unique_ptr<DGL_NAMESPACE::NanoImage> fLogoImg, fStageImg, fGrandImg;
+    float u = 1, k = 1, ox = 0, oy = 0; // the design's scale and where it sits
+    std::unique_ptr<DGL_NAMESPACE::NanoImage> fPlate, fCap, fMode[3][2];
     bool fImgTried = false;
     Rect fVolTrack {};
 };

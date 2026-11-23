@@ -31,8 +31,11 @@ public:
     explicit DiagView(DiagHost host);
     /// logical height of the diagnostics area shown; it occupies the bottom and reduces the controls viewport
     float height() const;
+    /// NA_Magicos: the Home screen's keyboard: the keys alone, the whole width (no header, no pedal levers)
+    void setCompact(bool compact);
     void setLevel(int level); // StripInteraction.hpp: 0 collapsed, 1 strip, 2 and 3 with a panel, 4 and 5 a panel alone
-    int level() const { return fLevel; }
+    int level() const { return fCompact ? fSavedLevel : fLevel; }
+    bool compact() const { return fCompact; }
     void layout(float width, float windowHeight);
     void setKeyWords(const float words[8]);
     void setPedal(float depth); // the engine's pedal depth (shown when the lever is not dragged)
@@ -67,6 +70,8 @@ private:
     float fPedal = 0;     // the engine's pedal depth (kDiagPedalOut)
     float fSoft = 0;      // the engine's soft pedal depth (kDiagSoftOut)
     Pedals fPedals;
+    bool fCompact = false;
+    int fSavedLevel = 1;
     int fRecordedLo = 21, fRecordedHi = 108; // MIDI
     int fPlaysLo = 21, fPlaysHi = 108; // MIDI
     bool fVizOffered = true;

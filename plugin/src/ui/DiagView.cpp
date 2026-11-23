@@ -44,11 +44,13 @@ DiagView::DiagView(DiagHost host)
 
 float DiagView::height() const
 {
+    if (fCompact) return kStripH;
     return kHeaderH + (diagStrip(fLevel) ? kStripH : 0.0f) + (diagPanel(fLevel) != 0 ? kPanelH : 0.0f);
 }
 
 void DiagView::setLevel(int level)
 {
+    if (fCompact) { fSavedLevel = std::min(5, std::max(0, level)); return; } // kept for the classic view
     level = std::min(5, std::max(0, level));
     if (diagPanel(level) == 2 && !fVizOffered) // no visualization here (a saved state from another instrument)
         level = diagLevel(diagStrip(level), 0);
@@ -72,9 +74,26 @@ void DiagView::idle()
     if (diagPanel(fLevel) == 2) fViz.idle(); // nothing to poll or draw otherwise
 }
 
+void DiagView::setCompact(bool compact)
+{
+    if (compact == fCompact) return;
+    if (compact) { fSavedLevel = fLevel; setLevel(1); } // the strip alone
+    fCompact = compact;
+    if (!compact) setLevel(fSavedLevel);
+}
+
 void DiagView::layout(float width, float windowHeight)
 {
     fWidth = width;
+    if (fCompact) {
+        fTop = windowHeight - kStripH;
+        fStrip = computeStrip({ 0, fTop, width, kStripH }, Pedals { false, false, false });
+        fKeyboardTab = fAnalysisTab = fVizTab = fWorkingRect = Rect {};
+        fInput.setLayout({ fTop, kPanelH, Rect {}, Rect {}, Rect {}, fStrip });
+        fPanel.layout({ 0, fTop, width, kPanelH }, fStrip);
+        fViz.layout({ 0, fTop, width, kPanelH }, fStrip);
+        return;
+    }
     fTop = windowHeight - height();
     // the panel on top, then the header, then the strip (its geometry also when shut: the panels' key columns)
     const float header = fTop + (diagPanel(fLevel) != 0 ? kPanelH : 0.0f);
@@ -171,14 +190,14 @@ void DiagView::draw(NanoVG& vg)
     vg.fontSize(theme::smallFont);
     // the three toggles, each its own part: the strip, the analysis, the visualization
     const bool strip = diagStrip(fLevel);
-    drawTab(vg, fKeyboardTab, strip ? "Keyboard  \xE2\x96\xBE" : "Keyboard  \xE2\x96\xB8", strip);
+    if (!fCompact) drawTab(vg, fKeyboardTab, strip ? "Keyboard  \xE2\x96\xBE" : "Keyboard  \xE2\x96\xB8", strip);
     if (fWorking && fWorkingRect.w > 0) { // a change on its way to the sound (Working.hpp)
         vg.fillColor(theme::accentText);
         vg.textAlign(NanoVG::Align(NanoVG::ALIGN_LEFT | NanoVG::ALIGN_MIDDLE));
         vg.text(fWorkingRect.x + 4, fWorkingRect.y + fWorkingRect.h / 2, kWorkingLabel, nullptr);
     }
-    drawTab(vg, fAnalysisTab, panel == 1 ? "Analysis  \xE2\x96\xBE" : "Analysis  \xE2\x96\xB8", panel == 1);
-    if (fVizOffered) drawTab(vg, fVizTab, panel == 2 ? "Visualization  \xE2\x96\xBE" : "Visualization  \xE2\x96\xB8", panel == 2);
+    if (!fCompact) drawTab(vg, fAnalysisTab, panel == 1 ? "Analysis  \xE2\x96\xBE" : "Analysis  \xE2\x96\xB8", panel == 1);
+    if (fVizOffered && !fCompact) drawTab(vg, fVizTab, panel == 2 ? "Visualization  \xE2\x96\xBE" : "Visualization  \xE2\x96\xB8", panel == 2);
     if (!strip) return;
 
     // reversed (many harpsichords): ebony naturals, bone sharps
@@ -258,6 +277,15 @@ void DiagView::draw(NanoVG& vg)
         vg.beginPath(); vg.rect(x0, sy, x1 - x0, 1.2f); vg.fillColor(Color(goldLight, Color(0, 0, 0), 0.55f)); vg.fill();
         vg.beginPath(); vg.rect(cx - 120, sy, 240, slipH);
         vg.fillPaint(vg.radialGradient(cx, sy + 1, 0, 120, Color(255, 180, 80, 0.6f), Color(255, 180, 80, 0.0f))); vg.fill();
+    }
+    if (fCompact && !fStrip.keys.empty()) { // NA_Magicos (Home): the design's line of gold light over the keys
+        vg.beginPath(); vg.rect(x0, top - 10, x1 - x0, 12);
+        vg.fillPaint(vg.linearGradient(0, top - 10, 0, top + 2, Color(255, 170, 60, 0.0f), Color(255, 170, 60, 0.55f))); vg.fill();
+        vg.beginPath(); vg.rect(x0, top, x1 - x0, 2);
+        vg.fillPaint(vg.linearGradient(x0, 0, x1, 0, Color(200, 130, 40), Color(255, 214, 140))); vg.fill();
+        const float mx = (x0 + x1) / 2;
+        vg.beginPath(); vg.rect(mx - 260, top - 14, 520, 30);
+        vg.fillPaint(vg.radialGradient(mx, top, 0, 260, Color(255, 200, 110, 0.55f), Color(255, 200, 110, 0.0f))); vg.fill();
     }
     // a pedal that acts: a slot with a lever at its depth, its name in the header row above
     const auto lever = [&](const Rect& r, float depth, const char* name) {

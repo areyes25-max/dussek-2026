@@ -297,6 +297,10 @@ protected:
         glClearStencil(0);
         glClear(GL_STENCIL_BUFFER_BIT);
         const float s = uiScale();
+        if (fDiag.compact() != fHome) { // NA_Magicos: Home plays on the keys alone
+            fDiag.setCompact(fHome);
+            relayout();
+        }
         beginPath(); rect(0, 0, getWidth(), getHeight()); fillColor(theme::bg); fill();
         if (fHome) { // NA_Magicos: the Home screen above the keyboard
             save();
@@ -769,7 +773,18 @@ private:
         return m;
     }
 
-    void goHome() { fHome = true; fListParam = -1; closeMenu(); fHomeHot = home::None; repaint(); }
+    void goHome()
+    {
+        fHome = true; fListParam = -1; closeMenu(); fHomeHot = home::None;
+        fitHome(fBig ? 1672.0 : 1254.0);
+        repaint();
+    }
+    /// the window shaped like the design (1672 x 736 above the keys), `width` wide
+    void fitHome(double width)
+    {
+        const double s = uiScale();
+        setSize((uint)(width * s), (uint)((width * 736.0 / 1672.0 + DiagView::kStripH) * s));
+    }
     void goClassic(Tab t)
     {
         fHome = false;
@@ -808,21 +823,15 @@ private:
         case NavEffects: goClassic(kTabEffects); break;
         case NavHall: goClassic(kTabMics); break;
         case Settings: goClassic(kTabSound); break;
-        case Bigger: {
+        case Bigger:
             fBig = !fBig;
-            const double s = uiScale();
-            const double w = fBig ? 1600 : kDefaultWidth, h = fBig ? 900 : kDefaultHeight;
-            setSize((uint)(w * s), (uint)((h + fDiag.height()) * s));
+            fitHome(fBig ? 1672.0 : 1254.0);
             break;
-        }
         case InstPrev: stepInstrument(-1, ""); break;
         case InstNext: stepInstrument(1, ""); break;
-        case Group0: case Group1: case Group2: case Group3: {
-            const std::vector<std::string> g = homeGroups(fCatalog->menu(kKind));
-            const size_t i = (size_t)(a - Group0);
-            if (i < g.size()) stepInstrument(entry().group == g[i] ? 1 : 0, g[i]);
+        case Group0: // Studio Piano: the uprights, the next one each click
+            stepInstrument(entry().group == "Upright pianos" ? 1 : 0, "Upright pianos");
             break;
-        }
         case Knob0: case Knob1: case Knob2: case Knob3: {
             fHomeDrag = a;
             fHomeDragY = y;
@@ -1888,6 +1897,8 @@ private:
                 getWindow().setTitle(appTitle(kKind));
                 restoreStandaloneSession();
             }
+            if (fHome) // NA_Magicos: the window opens shaped like the design
+                fitHome(std::max(1254.0, (double)getWidth() / uiScale()));
         }
         // the worker rescanned the instrument folders (a new one appeared, as the editor's preview)
         if (const CatalogPtr c = sharedCatalog(resources()); c != fCatalog) {
