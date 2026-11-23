@@ -1,4 +1,5 @@
 #include "check.hpp"
+#include "Effects.hpp"
 #include "About.hpp"
 #include "Catalog.hpp"
 #include "CurveSlot.hpp"
@@ -505,11 +506,13 @@ TEST(dussek_s_ports_are_the_released_table)
     for (size_t i = 0; i < released.size() && i < now.size(); ++i)
         CHECK(now[i].line == released[i].line);
     const std::vector<uint32_t>& p = pe::ports(pe::PluginKind::Keys);
-    CHECK(p.size() == 78);
-    for (uint32_t i = 0; i < p.size(); ++i)
+    CHECK(p.size() == 78 + 11); // NA_Magicos: the released table, then the effects rack
+    for (uint32_t i = 0; i < 78; ++i)
         CHECK(p[i] == i && pe::toHost(pe::PluginKind::Keys, i) == i);
-    CHECK(pe::toHost(pe::PluginKind::Keys, pe::kDiagPedalIn) == 78); // the diagnostics after the ports, as released
-    CHECK(pe::hostCount(pe::PluginKind::Keys) == 78 + (pe::kTotalParams - pe::kParamCount));
+    for (uint32_t i = 0; i < 11; ++i)
+        CHECK(p[78 + i] == pe::kFxReverb + i && pe::toHost(pe::PluginKind::Keys, pe::kFxReverb + i) == 78 + i);
+    CHECK(pe::toHost(pe::PluginKind::Keys, pe::kDiagPedalIn) == 78 + 11); // the diagnostics after the ports
+    CHECK(pe::hostCount(pe::PluginKind::Keys) == 78 + 11 + (pe::kTotalParams - pe::kParamCount)); // NA_Magicos: + the effects rack
 }
 
 TEST(weidinger_s_ports_are_its_lock)
@@ -539,7 +542,7 @@ TEST(each_plugin_s_port_groups_are_numbered_densely)
         }
         CHECK(used.size() == g.size()); // every group a port's
     }
-    CHECK(portGroups(PluginKind::Keys).size() == 7 && hostGroup(PluginKind::Keys, kGroupDefects) == kGroupDefects); // as released
+    CHECK(portGroups(PluginKind::Keys).size() == 8 && hostGroup(PluginKind::Keys, kGroupDefects) == kGroupDefects); // as released
     CHECK((portGroups(PluginKind::Winds) == std::vector<uint32_t> { kGroupInstrument, kGroupMics, kGroupTuning, kGroupBrass }));
 }
 
@@ -584,7 +587,7 @@ TEST(no_diagnostic_is_automatable)
 
 TEST(param_table_is_complete)
 {
-    CHECK(kParamCount == 93);
+    CHECK(kParamCount == 104); // NA_Magicos: + the 11 of the effects rack
     std::set<std::string> symbols;
     for (uint32_t i = 0; i < kParamCount; ++i) {
         const ParamInfo& p = paramInfo(i);
@@ -1434,7 +1437,7 @@ TEST(ui_state_round_trip_and_bad_input)
     const UiState d = parseUiState("garbage");
     CHECK(d.tab == kTabSound && d.zoom == 100);
     CHECK(parseUiState("tab=9;zoom=999").zoom == 100);         // not a zoom step
-    CHECK(parseUiState("tab=11;zoom=999").tab == kTabSound);   // no such tab
+    CHECK(parseUiState("tab=12;zoom=999").tab == kTabSound);   // no such tab
     CHECK(parseUiState(nullptr).zoom == 100 && parseUiState(nullptr).tab == kTabSound);
     // the diagnostics' level: a panel alone (4, 5) comes back too; past them nothing opens
     for (int l = 0; l <= 5; ++l) {
@@ -1898,7 +1901,7 @@ TEST(sweep_ignores_an_out_of_range_owner_pid)
 
 TEST(diagnostic_parameters_extend_the_table)
 {
-    CHECK(kParamCount == 93); // the user-visible table (diagnostics come after it)
+    CHECK(kParamCount == 104); // NA_Magicos: + the 11 of the effects rack // the user-visible table (diagnostics come after it)
     CHECK((uint32_t)kDiagPedalIn == (uint32_t)kParamCount);
     CHECK((uint32_t)kTotalParams == (uint32_t)kParamCount + 25);
     for (uint32_t i = kParamCount; i < kTotalParams; ++i) {
@@ -4087,7 +4090,7 @@ TEST(the_drawing_stays_put_between_instruments)
 
 TEST(ten_tabs_fit_two_rows)
 {
-    CHECK((int)kTabCount == 11); // ten at most on one instrument: Player is brass's, which has few
+    CHECK((int)kTabCount == 12); // NA_Magicos: + Effects; eleven at most on one instrument: Player is brass's, which has few
     for (float w : { kDefaultWidth, kMinWidth }) {
         const Layout l = computeLayout(w, kDefaultHeight, kTabSound, ctxOf(0, 1, 0));
         float lo = l.tabs[0].rect.y, hi = lo;
@@ -4895,6 +4898,8 @@ TEST(every_parameter_that_acts_shows_in_the_command_line)
                 const UiContext ctx = ctxOf(profile, mic, prep);
                 for (uint32_t p = 0; p < kParamCount; ++p) {
                     if (p == kMicPosition || p == kPrepMode || p == kAudioInput || !paramVisible(p, ctx))
+                        continue;
+                    if (p >= kFxReverb && p <= kFxEqHigh) // NA_Magicos: the plugin's effects rack, not the engine's
                         continue;
                     std::vector<float> v = defaults(profile, mic, prep);
                     if (p == kTemperamentKey)
@@ -6962,7 +6967,7 @@ TEST(about_is_the_last_tab)
     // the default window keeps the ten tabs on one row (the drawing gives up a little width for it)
     const Layout d = computeLayout(kDefaultWidth, kDefaultHeight, kTabSound, ctxOf(0, 1, 0));
     CHECK(d.tabs.size() == kTabCount - 1 && d.tabs.back().rect.y == d.tabs.front().rect.y);
-    CHECK(d.topView.w + d.frontView.w + kGap >= 0.5f * (kDefaultWidth - 3 * kPad) - 0.5f);
+    CHECK(d.topView.w + d.frontView.w + kGap >= 0.42f * (kDefaultWidth - 3 * kPad) - 0.5f); // NA_Magicos: + Effects
     // a wide window keeps the drawing's share as before
     const Layout big = computeLayout(1600, kDefaultHeight, kTabSound, ctxOf(0, 1, 0));
     CHECK_NEAR(big.topView.w + big.frontView.w + kGap, 0.55f * (1600 - 3 * kPad), 0.5);
@@ -7531,7 +7536,7 @@ TEST(each_plugin_keeps_its_own_presets)
         v[i] = paramInfo(i).def;
     const Preset f = presetFrom(PluginKind::Winds, "Mine", PresetScope::All, 0, v, {});
     CHECK(f.values.size() == pe::ports(PluginKind::Winds).size());
-    CHECK(presetFrom(PluginKind::Keys, "Mine", PresetScope::All, 0, v, {}).values.size() == 78);
+    CHECK(presetFrom(PluginKind::Keys, "Mine", PresetScope::All, 0, v, {}).values.size() == 78 + 11);
 }
 
 TEST(a_learned_tie_wins_over_brass_s_default)
@@ -7820,3 +7825,49 @@ TEST(standalone_session_persists_instrument_parameters_states_and_ui_controls)
 }
 
 
+
+// NA_Magicos: the effects rack does what its controls say (Effects.hpp)
+TEST(na_magicos_effects_rack_acts)
+{
+    using namespace pe::fx;
+    const double sr = 48000;
+    auto run = [&](const Settings& s, std::vector<float>& l, std::vector<float>& r) {
+        Rack rack; rack.prepare(sr);
+        for (size_t at = 0; at < l.size(); at += 256)
+            rack.process(l.data() + at, r.data() + at, (uint32_t)std::min<size_t>(256, l.size() - at), s);
+    };
+    const size_t n = 48000;
+    auto impulse = [&](std::vector<float>& l, std::vector<float>& r) { l.assign(n, 0); r.assign(n, 0); l[0] = r[0] = 1; };
+    std::vector<float> l, r;
+    // off: the sound passes untouched
+    impulse(l, r); run(Settings {}, l, r);
+    CHECK(l[0] == 1.0f && r[0] == 1.0f && std::fabs(l[1000]) < 1e-9f);
+    // the delay: its first echo at the time set (left), then across (right)
+    Settings d; d.delay = 100; d.delayMs = 250; d.feedback = 50;
+    impulse(l, r); run(d, l, r);
+    size_t peak = 1; for (size_t i = 1; i < n / 2; ++i) if (std::fabs(l[i]) > std::fabs(l[peak])) peak = i;
+    CHECK(peak > 11900 && peak < 12100);
+    float right = 0; for (size_t i = 23500; i < 24500; ++i) right = std::max(right, std::fabs(r[i]));
+    CHECK(right > 0.05f);
+    // the reverb: a tail after the sound, finite
+    Settings v; v.reverb = 80;
+    impulse(l, r); run(v, l, r);
+    double tail = 0; bool finite = true;
+    for (size_t i = 4800; i < n; ++i) { tail += (double)l[i] * l[i]; finite = finite && std::isfinite(l[i]) && std::isfinite(r[i]); }
+    CHECK(tail > 1e-6 && finite);
+    // the EQ: +12 dB low lifts a 60 Hz sine about 4x, the highs untouched
+    Settings e; e.low = 12;
+    l.assign(n, 0); r.assign(n, 0);
+    for (size_t i = 0; i < n; ++i) l[i] = r[i] = (float)std::sin(2 * M_PI * 60 * i / sr) * 0.1f;
+    run(e, l, r);
+    float pk = 0; for (size_t i = n / 2; i < n; ++i) pk = std::max(pk, std::fabs(l[i]));
+    CHECK(pk > 0.3f && pk < 0.45f);
+    // the chorus: changes the sound, stays bounded
+    Settings c; c.chorus = 100;
+    l.assign(n, 0); r.assign(n, 0);
+    for (size_t i = 0; i < n; ++i) l[i] = r[i] = (float)std::sin(2 * M_PI * 440 * i / sr) * 0.5f;
+    run(c, l, r);
+    float cp = 0; double diff = 0;
+    for (size_t i = n / 2; i < n; ++i) { cp = std::max(cp, std::fabs(l[i])); diff += std::fabs(l[i] - r[i]); }
+    CHECK(cp < 1.0f && diff > 1.0);
+}

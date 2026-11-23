@@ -14,7 +14,7 @@ namespace pe {
 struct Rect { float x = 0, y = 0, w = 0, h = 0;
     bool contains(float px, float py) const { return px >= x && px < x + w && py >= y && py < y + h; }
     bool overlaps(const Rect& o) const { return x < o.x + o.w && o.x < x + w && y < o.y + o.h && o.y < y + h; } };
-enum Tab : uint32_t { kTabSound, kTabMorph, kTabTouch, kTabFelt, kTabMics, kTabTuning, kTabCondition, kTabExtras, kTabMidi, kTabAbout, kTabPlayer, kTabCount };
+enum Tab : uint32_t { kTabSound, kTabMorph, kTabTouch, kTabFelt, kTabMics, kTabTuning, kTabCondition, kTabExtras, kTabMidi, kTabAbout, kTabPlayer, kTabEffects, kTabCount };
 enum class Kind { Slider, Toggle, Dropdown, Chips };
 /// a control: its row and the row's parts (the label; the control: a slider's track, a switch, a
 /// menu box; the value text, click to type). Compact rows put them on one line; the header's keep

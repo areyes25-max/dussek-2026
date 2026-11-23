@@ -100,12 +100,12 @@ Kind paramKind(uint32_t param)
 }
 
 // in the window: the Player tab, appended last so a saved tab keeps its number, beside Sound
-static constexpr Tab kTabOrder[] = { kTabSound, kTabPlayer, kTabMorph, kTabTouch, kTabFelt, kTabMics, kTabTuning, kTabCondition, kTabExtras, kTabMidi, kTabAbout };
+static constexpr Tab kTabOrder[] = { kTabSound, kTabEffects, kTabPlayer, kTabMorph, kTabTouch, kTabFelt, kTabMics, kTabTuning, kTabCondition, kTabExtras, kTabMidi, kTabAbout };
 static_assert(sizeof kTabOrder / sizeof kTabOrder[0] == kTabCount, "every tab has its place");
 
 const char* tabName(Tab t)
 {
-    static const char* const names[kTabCount] = { "Sound", "Morph", "Touch", "Felt", "Mics", "Tuning", "Condition", "Extras", "MIDI", "About", "Player" };
+    static const char* const names[kTabCount] = { "Sound", "Morph", "Touch", "Felt", "Mics", "Tuning", "Condition", "Extras", "MIDI", "About", "Player", "Effects" };
     return names[t < kTabCount ? t : 0];
 }
 
@@ -129,6 +129,10 @@ const std::vector<TabGroup>& tabGroups(Tab t)
         {}, // MIDI: MIDI learn's ties, no parameters
         {}, // About: the plugin's and the instrument's text, no parameters
         { { nullptr, { kVirtualPlayer, kBrassSolo, kGlideMode, kGlideHold, kGlideTime, kAirSet, kAir, kAirAdded, kAftertouchTo } } }, // Player: brass
+        { { "Reverb", { kFxReverb, kFxReverbSize } }, // NA_Magicos: the effects rack
+          { "Delay", { kFxDelay, kFxDelayTime, kFxDelayFeedback } },
+          { "Chorus", { kFxChorus, kFxChorusRate, kFxChorusDepth } },
+          { "EQ", { kFxEqLow, kFxEqMid, kFxEqHigh } } },
     };
     return g[t < kTabCount ? t : 0];
 }
@@ -265,6 +269,8 @@ std::vector<Rect> muteChips(const Row& r, const InstrumentEntry& e)
 bool tabShown(Tab t, const UiContext& c)
 {
     switch (t) {
+    case kTabEffects: // NA_Magicos: the effects rack, Dussek's
+        return c.plugin == PluginKind::Keys;
     case kTabPlayer: // Weidinger's
         return c.plugin == PluginKind::Winds && c.inst != nullptr && c.inst->info.brass;
     case kTabMorph:
@@ -383,7 +389,7 @@ Layout computeLayout(float width, float height, Tab tab, const UiContext& ctx)
         // stay in view. The drawing takes 55 % of the width, down to half where that puts the tabs
         // on one row (the default window)
         float share = 0.55f;
-        if (const float one = 1 - (tabsW + 0.5f) / (inner - pad); one < share && one >= 0.5f)
+        if (const float one = 1 - (tabsW + 0.5f) / (inner - pad); one < share && one >= 0.42f) // NA_Magicos: + Effects
             share = one;
         const float micW = (inner - pad) * share;
         const float full = std::min(micW * 0.45f, 260.0f), room = h - pad - y - kGap - mic.size() * line + kLineGap;

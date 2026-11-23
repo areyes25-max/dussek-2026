@@ -43,7 +43,8 @@ Group groupOf(uint32_t i)
         : i <= kWearSoundboard ? kGroupCondition
         : i <= kPhantom ? kGroupDefects
         : i <= kPaperBuzz ? kGroupPrepared
-                       : kGroupBrass;
+        : i <= kAirAdded ? kGroupBrass
+                       : kGroupEffects;
 }
 
 ParamInfo make(uint32_t i)
@@ -249,6 +250,39 @@ ParamInfo make(uint32_t i)
     case kAftertouchTo: set("Aftertouch to", "aftertouch_to", nullptr, 0, 0, 1);
         p.description = "What pressing on a held key does.";
         p.integer = true;
+        break;
+    case kFxReverb: set("Reverb", "fx_reverb", "%", 0, 0, 100);
+        p.description = "The reverb's amount, added to the sound (with the Room's own). 0: off.";
+        break;
+    case kFxReverbSize: set("Reverb size", "fx_reverb_size", "%", 60, 0, 100);
+        p.description = "How large the reverb's space is: its decay, from a small room to a cathedral.";
+        break;
+    case kFxDelay: set("Delay", "fx_delay", "%", 0, 0, 100);
+        p.description = "The echo's level, its repeats crossing left and right. 0: off.";
+        break;
+    case kFxDelayTime: set("Delay time", "fx_delay_time", "ms", 375, 20, 1900);
+        p.description = "The time between the echoes (375 ms: an eighth at 80 BPM).";
+        break;
+    case kFxDelayFeedback: set("Delay feedback", "fx_delay_feedback", "%", 35, 0, 90);
+        p.description = "How much of each echo comes back: how many repeats are heard.";
+        break;
+    case kFxChorus: set("Chorus", "fx_chorus", "%", 0, 0, 100);
+        p.description = "The chorus's amount: a moving copy that widens and thickens the sound. 0: off.";
+        break;
+    case kFxChorusRate: set("Chorus rate", "fx_chorus_rate", "Hz", 0.8f, 0.05f, 8);
+        p.description = "How fast the chorus moves.";
+        break;
+    case kFxChorusDepth: set("Chorus depth", "fx_chorus_depth", "%", 40, 0, 100);
+        p.description = "How far the chorus moves.";
+        break;
+    case kFxEqLow: set("EQ low", "fx_eq_low", "dB", 0, -12, 12);
+        p.description = "The equalizer's bass (a shelf at 120 Hz).";
+        break;
+    case kFxEqMid: set("EQ mid", "fx_eq_mid", "dB", 0, -12, 12);
+        p.description = "The equalizer's middle (a bell at 1 kHz).";
+        break;
+    case kFxEqHigh: set("EQ high", "fx_eq_high", "dB", 0, -12, 12);
+        p.description = "The equalizer's highs (a shelf at 8 kHz).";
         break;
     case kAirAdded: set("Air added", "air_added", "%", 0, 0, 100);
         p.description = "Air on top of what the keys or the Air knob give, up to the top at 100 %. The mod wheel (CC 1) plays it.";

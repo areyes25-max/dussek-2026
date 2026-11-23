@@ -588,6 +588,8 @@ protected:
             repaint();
             return true;
         }
+        if (fEditParam < 0 && pcKeyboard(ev))
+            return true;
         if (fEditParam < 0 || !ev.press)
             return false;
         if (ev.key == kKeyEnter) commitEdit();
@@ -609,6 +611,39 @@ protected:
     }
 
 private:
+    /// NA_Magicos: the computer's keyboard plays (no text field open): A W S E D F T G Y H U J K O L P ; '
+    /// are C to F a little more than an octave up, Z / X move the octave down / up (C4 at the start). A held
+    /// key plays once (the system's repeats ignored); its release is the note's.
+    bool pcKeyboard(const KeyboardEvent& ev)
+    {
+        if (ev.mod & (kModifierControl | kModifierAlt | kModifierSuper))
+            return false;
+        static const char kRow[] = "awsedftgyhujkolp;'";
+        const uint key = ev.key >= 'A' && ev.key <= 'Z' ? ev.key + 32 : ev.key;
+        if (key == 'z' || key == 'x') {
+            if (ev.press)
+                fPcOctave = std::clamp(fPcOctave + (key == 'z' ? -1 : 1), 0, 8);
+            return true;
+        }
+        const char* at = key < 128 && key != 0 ? std::strchr(kRow, (int)key) : nullptr;
+        if (at == nullptr)
+            return false;
+        const int idx = (int)(at - kRow);
+        if (ev.press) {
+            if (fPcHeld[idx] >= 0) return true; // the system's repeat
+            const int note = 12 * (fPcOctave + 1) + idx;
+            if (note > 127) return true;
+            fPcHeld[idx] = note;
+            sendNote(0, (uint8_t)note, 100);
+        } else if (fPcHeld[idx] >= 0) {
+            sendNote(0, (uint8_t)fPcHeld[idx], 0);
+            fPcHeld[idx] = -1;
+        }
+        return true;
+    }
+    int fPcOctave = 4;
+    int fPcHeld[18] = { -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1 };
+
     /// NA_Magicos: the cover art behind the whole window (filling it, centered), under a veil that keeps
     /// the controls readable; the panels over it are a little see-through (Theme.hpp)
     /// NA_Magicos: the name in the header, centered in the free space between the Sustain latch and the

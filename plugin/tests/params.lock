@@ -78,3 +78,14 @@
 75 bolt_mass 0 100 50 % -
 76 bolt_position 5 50 31 % -
 77 paper_buzz 0 100 50 % a
+78 fx_reverb 0 100 0 % a
+79 fx_reverb_size 0 100 60 % a
+80 fx_delay 0 100 0 % a
+81 fx_delay_time 20 1900 375 ms a
+82 fx_delay_feedback 0 90 35 % a
+83 fx_chorus 0 100 0 % a
+84 fx_chorus_rate 0.0500000007 8 0.800000012 Hz a
+85 fx_chorus_depth 0 100 40 % a
+86 fx_eq_low -12 12 0 dB a
+87 fx_eq_mid -12 12 0 dB a
+88 fx_eq_high -12 12 0 dB a

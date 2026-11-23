@@ -56,6 +56,7 @@
 #include <unistd.h>
 #include <vector>
 #include <iterator>
+#include "Effects.hpp"
 
 static_assert(pe::kParamCount <= PE_TELEMETRY_VALUES, "every parameter has a slot in the value mirror");
 
@@ -102,6 +103,7 @@ public:
             d_stderr2(DISTRHO_PLUGIN_NAME ": diagnostics region unavailable (the strip and the sound are unaffected)");
         }
         fRequestRate = getSampleRate();
+        fFx.prepare(getSampleRate());
         fRequest.fetch_add(1);
         fWorker = std::thread([this] { worker(); });
     }
@@ -177,9 +179,9 @@ protected:
         // one per Group (Params.hpp), in its order: a missing one left the group's symbol empty, which
         // DPF's LV2 export asserted on and skipped (the Preparation group, added later)
         static const char* const names[] = { "Instrument", "Microphones", "Tuning", "Noises & resonance",
-            "Condition", "Defects", "Preparation", "Brass" };
+            "Condition", "Defects", "Preparation", "Brass", "Effects" };
         static const char* const symbols[] = { "group_instrument", "group_microphones", "group_tuning",
-            "group_noises", "group_condition", "group_defects", "group_preparation", "group_brass" };
+            "group_noises", "group_condition", "group_defects", "group_preparation", "group_brass", "group_effects" };
         static_assert(std::size(names) == kGroupCount && std::size(symbols) == kGroupCount, "a name and a symbol per Group");
         // the host's id is the group's place among the plugin's (hostGroup): Weidinger's Brass is its fourth
         if (groupId < portGroups(kKind).size()) {
@@ -394,6 +396,7 @@ protected:
     void sampleRateChanged(double newSampleRate) override
     {
         fRequestRate = newSampleRate;
+        fFx.prepare(newSampleRate); // deactivated: not on the audio thread
         fRequest.fetch_add(1);
         fWake.notify_one();
     }
@@ -452,6 +455,7 @@ protected:
             for (uint32_t i = kDiagKeys0; i <= kDiagVoices; ++i)
                 fValues[i] = 0.0f;
             mixFading(input, left, right, frames);
+            runFx(left, right, frames); // the tails ring out while the next instrument loads
             // no instrument plays (loading, or it does not load): the ties and the instrument steps
             // still work (stepping away from an instrument that does not load); notes and pedals wait
             for (uint32_t i = 0; i < eventCount; ++i) {
@@ -535,6 +539,7 @@ protected:
         }
         pe_process(fEngine, input, left, right, frames);
         mixFading(input, left, right, frames);
+        runFx(left, right, frames);
         PeDiag diag;
         pe_diag(fEngine, &diag);
         for (uint32_t i = 0; i < 8; ++i)
@@ -643,6 +648,17 @@ private:
     }
 
     // audio thread: take a freshly loaded engine, or drop the one playing, if the retire slot is free
+    /// NA_Magicos: the effects rack on the outputs (Effects.hpp)
+    void runFx(float* left, float* right, uint32_t frames)
+    {
+        fx::Settings s;
+        s.reverb = fValues[kFxReverb]; s.reverbSize = fValues[kFxReverbSize];
+        s.delay = fValues[kFxDelay]; s.delayMs = fValues[kFxDelayTime]; s.feedback = fValues[kFxDelayFeedback];
+        s.chorus = fValues[kFxChorus]; s.chorusHz = fValues[kFxChorusRate]; s.chorusDepth = fValues[kFxChorusDepth];
+        s.low = fValues[kFxEqLow]; s.mid = fValues[kFxEqMid]; s.high = fValues[kFxEqHigh];
+        fFx.process(left, right, frames, s);
+    }
+
     /// the engine fading out after a handover (FadeOut), added to the outputs; given back once silent
     void mixFading(const float* input, float* left, float* right, uint32_t frames)
     {
@@ -886,6 +902,7 @@ private:
     }
 
     float fValues[kTotalParams];
+    fx::Rack fFx; // NA_Magicos: the effects rack (Effects.hpp)
     std::vector<float> fInput; // the audio input summed to mono, a buffer's worth (bufferSizeChanged)
     // the UI's own state (open sections, zoom): host and UI threads only
     mutable std::mutex fUiStateMutex;
