@@ -38,6 +38,13 @@ constexpr Identity identity(PluginKind k)
                     ".dussek-preset", "dussek", 2 };
 }
 
+/// NA_Magicos: the name the standalone's window and the About tab show. The internal name stays
+/// (identity().name): it names the user's data folder, the presets' header and the plugin in hosts.
+constexpr const char* appTitle(PluginKind k)
+{
+    return k == PluginKind::Keys ? "NA-Magico" : identity(k).name;
+}
+
 constexpr bool sameText(const char* a, const char* b)
 {
     while (*a && *a == *b) {

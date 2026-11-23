@@ -307,6 +307,7 @@ protected:
             if (!r.scrolls)
                 drawRow(r, inst);
         drawTabBar(*this, fLayout, tab(), fHotTab);
+        drawBrand();
         if (!fLayout.drawingScrolls)
             drawViews();
         ControlLook pl { kPanicTitle, std::string(), panicLit() ? 1.0f : 0.0f, true, fHotPanic, false, nullptr };
@@ -610,6 +611,35 @@ protected:
 private:
     /// NA_Magicos: the cover art behind the whole window (filling it, centered), under a veil that keeps
     /// the controls readable; the panels over it are a little see-through (Theme.hpp)
+    /// NA_Magicos: the name in the header, centered in the free space between the Sustain latch and the
+    /// Volume (only where it fits): gold letters spaced wide, a fine line under them
+    void drawBrand()
+    {
+        float left = -1, right = -1, y = 0, h = 0;
+        for (const Row& r : fLayout.rows) {
+            if (r.param == kSustainLatch) { left = r.rect.x + r.rect.w; y = r.rect.y; h = r.rect.h; }
+            if (r.param == kVolume) right = r.rect.x;
+        }
+        if (left < 0 || right < 0 || right - left < 120) return;
+        const float cx = (left + right) / 2, cy = y + h / 2;
+        const bool wide = right - left >= 220;
+        fontSize(wide ? 19 : 15);
+        textLetterSpacing(wide ? 4.0f : 2.0f);
+        textAlign(NanoVG::Align(NanoVG::ALIGN_CENTER | NanoVG::ALIGN_MIDDLE));
+        fillColor(Color(0, 0, 0, 0.6f));
+        text(cx + 1, cy, "NA-MAGICO", nullptr);
+        fillPaint(linearGradient(0, cy - 10, 0, cy + 8, Color(255, 226, 150), Color(196, 148, 60)));
+        text(cx, cy - 1, "NA-MAGICO", nullptr);
+        textLetterSpacing(0.0f);
+        beginPath(); rect(cx - 70, cy + 11, 140, 1);
+        fillPaint(linearGradient(cx - 70, 0, cx + 70, 0, Color(212, 175, 90, 0.0f), Color(212, 175, 90, 0.0f)));
+        fill();
+        beginPath(); rect(cx - 70, cy + 11, 70, 1);
+        fillPaint(linearGradient(cx - 70, 0, cx, 0, Color(212, 175, 90, 0.0f), Color(212, 175, 90, 0.9f))); fill();
+        beginPath(); rect(cx, cy + 11, 70, 1);
+        fillPaint(linearGradient(cx, 0, cx + 70, 0, Color(212, 175, 90, 0.9f), Color(212, 175, 90, 0.0f))); fill();
+    }
+
     void drawCoverArt()
     {
         if (!fCover && !fCoverFailed) {
@@ -1605,7 +1635,7 @@ private:
         if (!fTitled) {
             fTitled = true;
             if (isStandalone()) {
-                getWindow().setTitle(identity(kKind).name);
+                getWindow().setTitle(appTitle(kKind));
                 restoreStandaloneSession();
             }
         }

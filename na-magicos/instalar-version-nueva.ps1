@@ -11,5 +11,10 @@ $src = (Get-ChildItem $tmp -Recurse -Filter dussek.exe | Select-Object -First 1)
 Get-ChildItem $src | Where-Object Name -ne 'instruments' | Copy-Item -Destination "$base\dussek-na-magicos" -Recurse -Force
 # los presets NA_Magicos ya vienen dentro del programa: quita las copias viejas de tu carpeta para no verlos repetidos
 Remove-Item "$env:APPDATA\Dussek\presets\na-magicos-*.dussek-preset" -ErrorAction SilentlyContinue
+# acceso directo "NA-Magico" en el Escritorio (el viejo "Dussek NA_Magicos" se quita)
+$esc = [Environment]::GetFolderPath('Desktop')
+Remove-Item "$esc\Dussek*.lnk" -ErrorAction SilentlyContinue
+$ws = New-Object -ComObject WScript.Shell; $lnk = $ws.CreateShortcut("$esc\NA-Magico.lnk")
+$lnk.TargetPath = "$base\dussek-na-magicos\dussek.exe"; $lnk.WorkingDirectory = "$base\dussek-na-magicos"; $lnk.Save()
 Write-Host "Instalado desde $($zip.Name) ($($zip.LastWriteTime))" -ForegroundColor Green
 Start-Process "$base\dussek-na-magicos\dussek.exe" -WorkingDirectory "$base\dussek-na-magicos"

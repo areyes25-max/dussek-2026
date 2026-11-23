@@ -1,6 +1,7 @@
 #include "Panel.hpp"
 #include "Morph.hpp"
 #include "Theme.hpp"
+#include "Bevel.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -37,15 +38,11 @@ void drawTabBar(NanoVG& vg, const Layout& l, Tab active, int hot)
     vg.fontSize(theme::fontSize);
     for (const TabButton& t : l.tabs) {
         const bool on = t.tab == active;
-        if (on || (int)t.tab == hot) {
+        if (on || (int)t.tab == hot) // the selected tab stands out as a raised key, the one under the pointer too
+            bevel::raised(vg, t.rect.x + 1, t.rect.y + 1, t.rect.w - 2, t.rect.h - 3, theme::radius + 1, false, (int)t.tab == hot);
+        if (on) { // the selected tab's mark: a gold bar of light
             vg.beginPath();
-            vg.roundedRect(t.rect.x, t.rect.y, t.rect.w, t.rect.h, theme::radius);
-            vg.fillColor(on ? theme::panel : theme::line);
-            vg.fill();
-        }
-        if (on) { // the selected tab's mark
-            vg.beginPath();
-            vg.rect(t.rect.x + 4, t.rect.y + t.rect.h - 2, t.rect.w - 8, 2);
+            vg.rect(t.rect.x + 6, t.rect.y + t.rect.h - 3, t.rect.w - 12, 2);
             vg.fillColor(theme::accent);
             vg.fill();
         }
@@ -71,10 +68,7 @@ void drawEmptyNote(NanoVG& vg, const Rect& r)
 
 void drawPlainButton(NanoVG& vg, const Rect& b, const char* text, bool enabled, bool hot)
 {
-    vg.beginPath();
-    vg.roundedRect(b.x + 1, b.y + 2, b.w - 2, b.h - 4, theme::radius);
-    vg.fillColor(hot && enabled ? theme::line : theme::panel);
-    vg.fill();
+    bevel::raised(vg, b.x + 1, b.y + 2, b.w - 2, b.h - 4, theme::radius + 1, false, hot && enabled);
     vg.fontSize(theme::fontSize);
     label(vg, b.x + b.w / 2, b.y + b.h / 2, text, enabled ? theme::text : theme::faint, NanoVG::ALIGN_CENTER | NanoVG::ALIGN_MIDDLE);
 }
@@ -233,10 +227,9 @@ void drawMidiRow(NanoVG& vg, const MidiRow& r, const char* name, const std::stri
     label(vg, detailX, my, detail.c_str(), theme::text, NanoVG::ALIGN_LEFT | NanoVG::ALIGN_MIDDLE);
     vg.restore();
     const Rect& b = r.button;
+    bevel::raised(vg, b.x + 1, b.y + 2, b.w - 2, b.h - 4, theme::radius + 1, false, hot);
     vg.beginPath();
-    vg.roundedRect(b.x + 1, b.y + 2, b.w - 2, b.h - 4, theme::radius);
-    vg.fillColor(theme::panel);
-    vg.fill();
+    vg.roundedRect(b.x + 1, b.y + 2, b.w - 2, b.h - 4, theme::radius + 1);
     if (accent) {
         vg.strokeColor(theme::accent);
         vg.strokeWidth(1);
@@ -262,25 +255,14 @@ void drawCompactRow(NanoVG& vg, const Row& r, const ControlLook& c)
     switch (r.kind) {
     case Kind::Slider: {
         const Rect& t = r.control;
-        const float th = theme::track;
-        vg.beginPath();
-        vg.roundedRect(t.x, my - th / 2, t.w, th, th / 2);
-        vg.fillColor(theme::line);
-        vg.fill();
-        vg.beginPath();
-        vg.roundedRect(t.x, my - th / 2, t.w * c.norm, th, th / 2);
-        vg.fillColor(theme::accent);
-        vg.fill();
-        vg.beginPath();
-        vg.roundedRect(t.x + t.w * c.norm - 2, my - 7, 4, 14, 2);
-        vg.fillColor(c.hot ? theme::accentText : theme::text);
-        vg.fill();
+        const float th = theme::track + 1.0f;
+        bevel::track(vg, t.x, my - th / 2, t.w, th, c.norm, true);
+        bevel::knob(vg, t.x + t.w * c.norm, my, c.hot ? 6.5f : 5.5f, true, c.hot);
         const Rect& v = r.value; // click to type: a field while typing
         if (c.editing) {
+            bevel::sunken(vg, v.x, v.y + 2, v.w, v.h - 4, theme::radius);
             vg.beginPath();
             vg.roundedRect(v.x, v.y + 2, v.w, v.h - 4, theme::radius);
-            vg.fillColor(theme::bg);
-            vg.fill();
             vg.strokeColor(theme::accent);
             vg.strokeWidth(1);
             vg.stroke();
@@ -298,24 +280,22 @@ void drawCompactRow(NanoVG& vg, const Row& r, const ControlLook& c)
     case Kind::Toggle: {
         const bool on = c.norm >= 0.5f;
         const Rect& s = r.control;
-        vg.beginPath();
-        vg.roundedRect(s.x, s.y, s.w, s.h, s.h / 2);
-        vg.fillColor(on ? theme::accent : theme::line);
-        vg.fill();
+        bevel::sunken(vg, s.x, s.y, s.w, s.h, s.h / 2);
+        if (on) { // lit gold inside the slot
+            vg.beginPath(); vg.roundedRect(s.x + 1, s.y + 1, s.w - 2, s.h - 2, (s.h - 2) / 2);
+            vg.fillPaint(vg.linearGradient(0, s.y, 0, s.y + s.h, bevel::shade(theme::accent, 0.2f), bevel::shade(theme::accent, -0.3f)));
+            vg.fill();
+        }
         const float d = std::max(1.0f, s.h - 4);
-        vg.beginPath();
-        vg.circle(on ? s.x + s.w - 2 - d / 2 : s.x + 2 + d / 2, s.y + s.h / 2, d / 2);
-        vg.fillColor(on ? theme::accentText : theme::dim);
-        vg.fill();
+        bevel::knob(vg, on ? s.x + s.w - 2 - d / 2 : s.x + 2 + d / 2, s.y + s.h / 2, d / 2, on, c.hot);
         break;
     }
     case Kind::Dropdown: {
         const Rect& b = r.control;
-        vg.beginPath();
-        vg.roundedRect(b.x, b.y + 1, b.w, b.h - 2, theme::radius);
-        vg.fillColor(c.editing ? theme::bg : c.hot ? theme::line : theme::panel);
-        vg.fill();
+        if (c.editing) bevel::sunken(vg, b.x, b.y + 1, b.w, b.h - 2, theme::radius);
+        else bevel::raised(vg, b.x, b.y + 1, b.w, b.h - 2, theme::radius + 1, false, c.hot);
         if (c.editing) { // a name typed in place (a preset's Save as…)
+            vg.beginPath(); vg.roundedRect(b.x, b.y + 1, b.w, b.h - 2, theme::radius);
             vg.strokeColor(theme::accent);
             vg.strokeWidth(1);
             vg.stroke();

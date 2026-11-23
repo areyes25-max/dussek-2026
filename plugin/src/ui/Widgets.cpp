@@ -1,5 +1,6 @@
 #include "Widgets.hpp"
 #include "Theme.hpp"
+#include "Bevel.hpp"
 
 #include <algorithm>
 
@@ -27,13 +28,11 @@ void drawSlider(NanoVG& vg, const Rect& r, const ControlLook& c)
     // the click-to-type behavior is visible without turning every row into a box.
     const float valueW = std::min(r.w * 0.34f, 132.0f);
     if (c.hot || c.editing) {
-        vg.beginPath();
-        vg.roundedRect(r.x + r.w - valueW, r.y + 1, valueW, r.h * 0.56f, theme::radius);
-        vg.fillColor(theme::panel);
-        vg.fill();
-        vg.strokeColor(c.editing ? theme::accent : theme::line);
-        vg.strokeWidth(1);
-        vg.stroke();
+        bevel::sunken(vg, r.x + r.w - valueW, r.y + 1, valueW, r.h * 0.56f, theme::radius);
+        if (c.editing) {
+            vg.beginPath(); vg.roundedRect(r.x + r.w - valueW, r.y + 1, valueW, r.h * 0.56f, theme::radius);
+            vg.strokeColor(theme::accent); vg.strokeWidth(1); vg.stroke();
+        }
     }
     const std::string& v = c.editing && c.editText ? *c.editText : c.value;
     const auto& valueColor = c.editing ? theme::accentText : c.active ? (c.hot ? theme::accentText : theme::text) : theme::faint;
@@ -41,47 +40,23 @@ void drawSlider(NanoVG& vg, const Rect& r, const ControlLook& c)
         NanoVG::Align(NanoVG::ALIGN_RIGHT | NanoVG::ALIGN_MIDDLE));
 
     const float ty = r.y + r.h * 0.78f;
-    const float trackH = c.hot ? theme::track + 1.5f : theme::track;
-    vg.beginPath();
-    vg.roundedRect(r.x, ty - trackH / 2, r.w, trackH, trackH / 2);
-    vg.fillColor(theme::line);
-    vg.fill();
-    vg.beginPath();
-    vg.roundedRect(r.x, ty - trackH / 2, r.w * c.norm, trackH, trackH / 2);
-    vg.fillColor(c.active ? theme::accent : theme::marker);
-    vg.fill();
-    const float knobX = r.x + r.w * c.norm;
-    const float knobR = c.hot ? theme::knob + 1.5f : theme::knob;
-    if (c.hot) {
-        vg.beginPath();
-        vg.circle(knobX, ty, knobR + 2);
-        vg.strokeColor(theme::accentText);
-        vg.strokeWidth(1);
-        vg.stroke();
-    }
-    vg.beginPath();
-    vg.circle(knobX, ty, knobR);
-    vg.fillColor(c.active ? (c.hot ? theme::accentText : theme::accent) : theme::marker);
-    vg.fill();
+    const float trackH = theme::track + 2.0f;
+    bevel::track(vg, r.x, ty - trackH / 2, r.w, trackH, c.norm, c.active);
+    bevel::knob(vg, r.x + r.w * c.norm, ty, c.hot ? theme::knob + 1.5f : theme::knob, c.active, c.hot);
 }
 
 void drawToggle(NanoVG& vg, const Rect& r, const ControlLook& c)
 {
     const bool on = c.norm >= 0.5f;
-    vg.beginPath();
-    vg.roundedRect(r.x, r.y, r.w, r.h, theme::radius);
-    vg.fillColor(on ? theme::accent : theme::panel);
-    vg.fill();
+    bevel::raised(vg, r.x, r.y, r.w, r.h, theme::radius + 1, on, c.hot);
     vg.fontSize(theme::fontSize);
-    label(vg, r.x + r.w / 2, r.y + r.h / 2, c.label, on ? theme::text : theme::dim, NanoVG::Align(NanoVG::ALIGN_CENTER | NanoVG::ALIGN_MIDDLE));
+    label(vg, r.x + r.w / 2, r.y + r.h / 2 + 0.5f, c.label, on ? DGL_NAMESPACE::Color(26, 18, 8) : (c.hot ? theme::text : theme::dim),
+        NanoVG::Align(NanoVG::ALIGN_CENTER | NanoVG::ALIGN_MIDDLE));
 }
 
 void drawDropdown(NanoVG& vg, const Rect& r, const ControlLook& c)
 {
-    vg.beginPath();
-    vg.roundedRect(r.x, r.y, r.w, r.h, theme::radius);
-    vg.fillColor(c.hot ? theme::line : theme::panel);
-    vg.fill();
+    bevel::raised(vg, r.x, r.y, r.w, r.h, theme::radius + 1, false, c.hot);
     vg.fontSize(theme::fontSize);
     const std::string s = c.value + "  ▾";
     label(vg, r.x + 10, r.y + r.h / 2, s.c_str(), c.active ? theme::text : theme::faint, NanoVG::Align(NanoVG::ALIGN_LEFT | NanoVG::ALIGN_MIDDLE));
@@ -89,11 +64,14 @@ void drawDropdown(NanoVG& vg, const Rect& r, const ControlLook& c)
 
 void drawDropdownList(NanoVG& vg, const Rect& l, const std::vector<std::string>& items, int selected, int hot, float scroll)
 {
+    vg.beginPath(); vg.rect(l.x - 4, l.y, l.w + 8, l.h + 8); // the open list floats over the window
+    vg.fillPaint(vg.boxGradient(l.x, l.y + 3, l.w, l.h, theme::radius, 8, DGL_NAMESPACE::Color(0, 0, 0, 0.6f), DGL_NAMESPACE::Color(0, 0, 0, 0.0f)));
+    vg.fill();
     vg.beginPath();
     vg.roundedRect(l.x, l.y, l.w, l.h, theme::radius);
-    vg.fillColor(theme::panel);
+    vg.fillColor(DGL_NAMESPACE::Color(20, 15, 10));
     vg.fill();
-    vg.strokeColor(theme::line);
+    vg.strokeColor(DGL_NAMESPACE::Color(theme::gold, DGL_NAMESPACE::Color(0, 0, 0), 0.4f));
     vg.stroke();
     vg.save();
     vg.intersectScissor(l.x, l.y, l.w, l.h);
@@ -105,8 +83,8 @@ void drawDropdownList(NanoVG& vg, const Rect& l, const std::vector<std::string>&
             break;
         if ((int)i == hot) {
             vg.beginPath();
-            vg.rect(l.x, y, l.w, kRowH);
-            vg.fillColor(theme::line);
+            vg.rect(l.x + 1, y, l.w - 2, kRowH);
+            vg.fillPaint(vg.linearGradient(0, y, 0, y + kRowH, DGL_NAMESPACE::Color(92, 70, 34), DGL_NAMESPACE::Color(60, 45, 22)));
             vg.fill();
         }
         label(vg, l.x + 10, y + kRowH / 2, items[i].c_str(), (int)i == selected ? theme::accentText : theme::text,

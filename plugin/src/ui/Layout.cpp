@@ -571,7 +571,9 @@ Layout computeLayout(float width, float height, Tab tab, const UiContext& ctx)
             l.subheadings.push_back({ title, { x, y, w, kSubheadH } });
             y += kSubheadH + kLineGap;
         };
-        line(std::string(identity(ctx.plugin).name) + " " + versionText(), LineStyle::Title);
+        line(std::string(appTitle(ctx.plugin)) + " " + versionText(), LineStyle::Title);
+        if (ctx.plugin == PluginKind::Keys) // NA_Magicos: the original it is built from, and its license
+            line("NA_Magicos edition of Dussek by Christian Friedrich Coors", LineStyle::Dim);
         line(std::string("Built from commit ") + buildCommit(), LineStyle::Dim);
         line(kPluginLicenseLine, LineStyle::Dim);
         line(kThirdPartyLine, LineStyle::Dim);
