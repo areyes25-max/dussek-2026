@@ -620,22 +620,24 @@ private:
         const Size<uint> sz = fCover->getSize();
         const float W = (float)getWidth(), H = (float)getHeight();
         if (sz.getWidth() == 0 || sz.getHeight() == 0) return;
-        // the pianist in the free space at the lower right: his face (at 39 %, 26 % of the image) under the
-        // controls' right column, the image as tall as the window; to its left the background stays dark
-        const float ih = H * 0.95f, iw = ih * (float)sz.getWidth() / (float)sz.getHeight();
-        const float ox = W * 0.67f - 0.39f * iw, oy = H * 0.48f - 0.26f * ih;
+        // the pianist at the grand, at the lower right just above the keyboard strip: his hands on the keys
+        // in view; about four fifths of the controls' height, no wider than 60 % of the window
+        const float avail = viewHeight() * uiScale();
+        float ih = avail * 0.80f, iw = ih * (float)sz.getWidth() / (float)sz.getHeight();
+        if (iw > W * 0.6f) { iw = W * 0.6f; ih = iw * (float)sz.getHeight() / (float)sz.getWidth(); }
+        const float ox = W - iw, oy = avail - ih;
         beginPath(); rect(ox, oy, iw, ih);
-        fillPaint(imagePattern(ox, oy, iw, ih, 0, *fCover, 0.9f)); fill();
+        fillPaint(imagePattern(ox, oy, iw, ih, 0, *fCover, 0.95f)); fill();
         // its left and top edges fade into the background
-        beginPath(); rect(ox, 0, W * 0.18f, H);
-        fillPaint(linearGradient(ox, 0, ox + W * 0.18f, 0, theme::bg, Color(theme::bg, Color(0, 0, 0, 0.0f), 1.0f))); fill();
-        beginPath(); rect(0, oy, W, H * 0.15f);
-        fillPaint(linearGradient(0, oy, 0, oy + H * 0.15f, theme::bg, Color(theme::bg, Color(0, 0, 0, 0.0f), 1.0f))); fill();
+        beginPath(); rect(ox, oy, iw * 0.22f, ih);
+        fillPaint(linearGradient(ox, 0, ox + iw * 0.22f, 0, theme::bg, Color(theme::bg, Color(0, 0, 0, 0.0f), 1.0f))); fill();
+        beginPath(); rect(ox, oy, iw, ih * 0.18f);
+        fillPaint(linearGradient(0, oy, 0, oy + ih * 0.18f, theme::bg, Color(theme::bg, Color(0, 0, 0, 0.0f), 1.0f))); fill();
         // the veil: darker on the left, where most controls sit, lighter over the pianist on the right
         beginPath(); rect(0, 0, W, H);
-        fillPaint(linearGradient(0, 0, W, 0, Color(0, 0, 0, 0.70f), Color(0, 0, 0, 0.12f))); fill();
+        fillPaint(linearGradient(0, 0, W, 0, Color(0, 0, 0, 0.55f), Color(0, 0, 0, 0.0f))); fill();
         beginPath(); rect(0, 0, W, H);
-        fillPaint(linearGradient(0, 0, 0, H, Color(0, 0, 0, 0.10f), Color(0, 0, 0, 0.45f))); fill();
+        fillPaint(linearGradient(0, 0, 0, H, Color(0, 0, 0, 0.10f), Color(0, 0, 0, 0.20f))); fill();
     }
     std::unique_ptr<NanoImage> fCover;
     bool fCoverFailed = false;
