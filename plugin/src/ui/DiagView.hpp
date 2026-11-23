@@ -26,7 +26,7 @@ struct DiagHost {
 
 class DiagView {
 public:
-    static constexpr float kHeaderH = 24, kStripH = 84, kPanelH = 300;
+    static constexpr float kHeaderH = 24, kStripH = 112, kPanelH = 300;
     using PanelSettings = pe::PanelSettings;
     explicit DiagView(DiagHost host);
     /// logical height of the diagnostics area shown; it occupies the bottom and reduces the controls viewport

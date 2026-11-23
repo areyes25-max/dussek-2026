@@ -186,54 +186,78 @@ void DiagView::draw(NanoVG& vg)
     const Color black = fReversedKeys ? Color(226, 218, 200) : theme::ebony;
     // extrapolated keys (beyond the recorded ones): an amber tint on either color
     const Color amber(204, 150, 84);
-    // NA_Magicos: the keys played light up sky blue (held strongly, still ringing only faintly)
+    // NA_Magicos: a concert grand's keyboard in black lacquer with gold light (the channel's reference
+    // picture, drawn flat so each lit key is exactly the note played); the keys played light up sky blue
     const Color sky(96, 190, 255), skyDeep(40, 132, 220);
-    float top = 1e9f;
-    for (const KeyShape& s : fStrip.keys) top = std::min(top, s.r.y);
-    // the gaps between the naturals: a dark bed under the keys
+    const Color cream(248, 240, 222), lacquer(8, 7, 6), goldLight(255, 196, 92);
+    float top = 1e9f, x0 = 1e9f, x1 = -1e9f, kh = 0;
+    for (const KeyShape& s : fStrip.keys) {
+        top = std::min(top, s.r.y); x0 = std::min(x0, s.r.x); x1 = std::max(x1, s.r.x + s.r.w);
+        if (!s.black) kh = s.r.h;
+    }
+    const float slipH = 7.0f, fallH = 9.0f;      // the key slip under the keys, the fallboard's lip over them
     if (!fStrip.keys.empty()) {
-        const KeyShape& a = fStrip.keys.front();
-        const KeyShape& b = fStrip.keys.back();
-        vg.beginPath(); vg.rect(a.r.x, top, b.r.x + b.r.w - a.r.x, a.r.h); vg.fillColor(Color(6, 5, 4)); vg.fill();
+        vg.beginPath(); vg.rect(x0, top, x1 - x0, kh); vg.fillColor(Color(4, 3, 3)); vg.fill(); // the gaps
     }
     for (int pass = 0; pass < 2; ++pass) // white keys, then black on top
         for (int k = 0; k < kKeys; ++k) {
             const KeyShape& s = fStrip.keys[(size_t)k];
             if (s.black != (pass == 1)) continue;
             const KeyLight l = keyLight(fWords, k);
-            Color c = s.black ? black : white;
+            Color c = s.black ? black : (fReversedKeys ? white : cream);
             if (k + 21 < fRecordedLo || k + 21 > fRecordedHi) c = mix(c, amber, s.black ? 0.4f : 0.45f);
-            // keys that do not play: gray, apart from the amber, on either color
             if (k + 21 < fPlaysLo || k + 21 > fPlaysHi) c = s.black ? Color(84, 86, 90) : Color(128, 130, 134);
             if (l.held) c = s.black ? skyDeep : sky;
             else if (l.ringing) c = mix(c, sky, s.black ? 0.25f : 0.18f);
-            const float x = s.r.x, w = s.r.w, h = s.r.h;
-            const float y = s.r.y + (l.held ? 1.0f : 0.0f); // a pressed key sinks a hair
+            const float x = s.r.x, w = s.r.w;
             if (!s.black) {
-                // a natural: clean ivory, a soft shade under the fallboard, a thin front edge
-                vg.beginPath(); vg.roundedRect(x + 0.6f, y, std::max(0.5f, w - 1.2f), h - (y - s.r.y), 1.5f);
-                vg.fillPaint(vg.linearGradient(0, y, 0, y + h * 0.35f, mix(c, Color(0, 0, 0), 0.10f), c));
+                const float y = top + fallH - 2.0f, h = kh - fallH - slipH + 4.0f;
+                // ivory, warm under the gold light near the fallboard, a touch deeper at the front
+                vg.beginPath(); vg.rect(x + 0.6f, y, std::max(0.5f, w - 1.2f), h);
+                vg.fillPaint(vg.linearGradient(0, y, 0, y + h, mix(c, goldLight, l.held ? 0.0f : 0.18f), mix(c, Color(0, 0, 0), 0.07f)));
                 vg.fill();
-                vg.beginPath(); vg.rect(x + 0.6f, s.r.y + h - 2.5f, std::max(0.5f, w - 1.2f), 2.5f);
-                vg.fillColor(mix(c, Color(0, 0, 0), 0.18f)); vg.fill();
+                vg.beginPath(); vg.rect(x + 0.6f, y + h - 2.0f, std::max(0.5f, w - 1.2f), 2.0f); // the front edge
+                vg.fillColor(mix(c, Color(0, 0, 0), 0.22f)); vg.fill();
             } else {
-                // a sharp: ebony with a soft shadow on the naturals and a quiet highlight at its front
-                vg.beginPath(); vg.rect(x - 1, y, w + 4, h + 3);
-                vg.fillPaint(vg.boxGradient(x + 1, y, w, h + 1, 2, 4, Color(0, 0, 0, 0.35f), Color(0, 0, 0, 0.0f))); vg.fill();
-                vg.beginPath(); vg.roundedRect(x, y, w, h, 1.5f);
-                vg.fillPaint(vg.linearGradient(0, y, 0, y + h, mix(c, Color(255, 255, 255), 0.05f), mix(c, Color(255, 255, 255), 0.14f)));
+                const float y = top + fallH - 2.0f, h = s.r.h - fallH + 6.0f;
+                // its shadow on the ivory
+                vg.beginPath(); vg.rect(x - 1, y, w + 5, h + 4);
+                vg.fillPaint(vg.boxGradient(x + 1.5f, y, w, h + 1.5f, 2, 4, Color(0, 0, 0, 0.5f), Color(0, 0, 0, 0.0f))); vg.fill();
+                // glossy ebony: dark body, a soft reflection down its left side, a bright rounded front
+                vg.beginPath(); vg.roundedRect(x, y, w, h, 1.8f);
+                vg.fillPaint(vg.linearGradient(0, y, 0, y + h, mix(c, Color(0, 0, 0), 0.2f), mix(c, Color(255, 255, 255), 0.10f)));
                 vg.fill();
-                const float lip = std::max(3.0f, h * 0.10f);
-                vg.beginPath(); vg.roundedRect(x + 1.2f, y + h - lip, w - 2.4f, lip - 1.0f, 1.0f);
-                vg.fillColor(mix(c, Color(255, 255, 255), 0.22f)); vg.fill();
+                vg.beginPath(); vg.rect(x + w * 0.16f, y + 2.0f, std::max(0.8f, w * 0.16f), h * 0.78f);
+                vg.fillPaint(vg.linearGradient(0, y, 0, y + h * 0.78f, Color(255, 255, 255, 0.04f), Color(255, 255, 255, l.held ? 0.35f : 0.20f)));
+                vg.fill();
+                const float lip = std::max(3.0f, h * 0.11f);
+                vg.beginPath(); vg.roundedRect(x + 1.0f, y + h - lip, w - 2.0f, lip - 0.8f, 1.2f);
+                vg.fillPaint(vg.linearGradient(0, y + h - lip, 0, y + h, mix(c, Color(255, 255, 255), 0.35f), mix(c, Color(255, 255, 255), 0.12f)));
+                vg.fill();
             }
         }
-    if (!fStrip.keys.empty()) { // the fallboard over the keys: its shadow and a gold rule
-        float x0 = 1e9f, x1 = -1e9f;
-        for (const KeyShape& s : fStrip.keys) { x0 = std::min(x0, s.r.x); x1 = std::max(x1, s.r.x + s.r.w); }
-        vg.beginPath(); vg.rect(x0, top, x1 - x0, 8);
-        vg.fillPaint(vg.linearGradient(0, top, 0, top + 6, Color(0, 0, 0, 0.30f), Color(0, 0, 0, 0.0f))); vg.fill();
-        vg.beginPath(); vg.rect(x0, top - 1.5f, x1 - x0, 1.5f); vg.fillColor(theme::gold); vg.fill();
+    if (!fStrip.keys.empty()) {
+        const float cx = (x0 + x1) / 2;
+        // the fallboard: black lacquer with a gold rim of light along the keys
+        vg.beginPath(); vg.rect(x0, top, x1 - x0, fallH);
+        vg.fillPaint(vg.linearGradient(0, top, 0, top + fallH, Color(18, 14, 10), lacquer)); vg.fill();
+        vg.beginPath(); vg.rect(x0, top + fallH - 2.0f, x1 - x0, 1.6f);
+        vg.fillPaint(vg.linearGradient(x0, 0, x1, 0, Color(goldLight, Color(0, 0, 0), 0.45f), Color(goldLight, Color(0, 0, 0), 0.45f)));
+        vg.fill();
+        for (float fx : { 0.18f, 0.5f, 0.82f }) { // warm highlights on the lacquer, as stage lights catch it
+            const float hx = x0 + (x1 - x0) * fx;
+            vg.beginPath(); vg.rect(hx - 70, top, 140, fallH);
+            vg.fillPaint(vg.radialGradient(hx, top + fallH - 2, 0, 70, Color(255, 190, 90, 0.55f), Color(255, 190, 90, 0.0f))); vg.fill();
+        }
+        vg.beginPath(); vg.rect(x0, top + fallH - 1.0f, x1 - x0, 6);  // the lacquer's shadow on the keys
+        vg.fillPaint(vg.linearGradient(0, top + fallH - 1, 0, top + fallH + 5, Color(0, 0, 0, 0.35f), Color(0, 0, 0, 0.0f))); vg.fill();
+        // the key slip under the keys, with a pool of gold light in the middle
+        const float sy = top + kh - slipH;
+        vg.beginPath(); vg.rect(x0, sy, x1 - x0, slipH);
+        vg.fillPaint(vg.linearGradient(0, sy, 0, sy + slipH, Color(22, 17, 12), lacquer)); vg.fill();
+        vg.beginPath(); vg.rect(x0, sy, x1 - x0, 1.2f); vg.fillColor(Color(goldLight, Color(0, 0, 0), 0.55f)); vg.fill();
+        vg.beginPath(); vg.rect(cx - 120, sy, 240, slipH);
+        vg.fillPaint(vg.radialGradient(cx, sy + 1, 0, 120, Color(255, 180, 80, 0.6f), Color(255, 180, 80, 0.0f))); vg.fill();
     }
     // a pedal that acts: a slot with a lever at its depth, its name in the header row above
     const auto lever = [&](const Rect& r, float depth, const char* name) {
