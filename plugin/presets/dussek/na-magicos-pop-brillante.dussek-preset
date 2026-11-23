@@ -1,0 +1,11 @@
+# NA_Magicos shipped preset: presente y brillante para acompanar voces y ritmos (merengue, bachata, pop)
+version = 1
+name = NA Magicos - Pop brillante
+scope = all
+state.instrument = grand_a
+state.velocity_curve = 1:10,40:46,96:104,127:122
+param.mic_position = 3
+param.hammer_hardness = 8
+param.room = -16
+param.damper_fall = 0
+param.dynamics = 26

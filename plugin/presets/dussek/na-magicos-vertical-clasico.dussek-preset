@@ -1,0 +1,7 @@
+# NA_Magicos shipped preset: piano vertical de casa, cercano
+version = 1
+name = NA Magicos - Vertical clasico
+scope = all
+state.instrument = upright_a
+param.room = -10
+param.dynamics = 30

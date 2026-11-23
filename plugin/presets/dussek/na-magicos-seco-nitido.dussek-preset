@@ -1,0 +1,12 @@
+# NA_Magicos shipped preset: sin sala ni cola: la nota se corta al soltar la tecla (medido: -40 dB en 0.10 s)
+version = 1
+name = NA Magicos - Seco nitido
+scope = all
+state.instrument = grand_a
+state.velocity_curve = 1:10,40:46,96:104,127:122
+param.mic_position = 3
+param.room = -40
+param.damper_fall = 0
+param.sympathetic = 50
+param.release = -20
+param.dynamics = 30

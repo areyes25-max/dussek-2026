@@ -208,7 +208,7 @@ void DiagView::draw(NanoVG& vg)
             if (k + 21 < fRecordedLo || k + 21 > fRecordedHi) c = mix(c, amber, s.black ? 0.4f : 0.45f);
             if (k + 21 < fPlaysLo || k + 21 > fPlaysHi) c = s.black ? Color(84, 86, 90) : Color(128, 130, 134);
             if (l.held) c = s.black ? skyDeep : sky;
-            else if (l.ringing) c = mix(c, sky, s.black ? 0.25f : 0.18f);
+            // NA_Magicos: only the keys held down light up (a key let go is dark at once, even while it rings)
             const float x = s.r.x, w = s.r.w;
             if (!s.black) {
                 const float y = top + fallH - 2.0f, h = kh - fallH - slipH + 4.0f;

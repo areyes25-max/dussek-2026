@@ -1,0 +1,8 @@
+# NA_Magicos shipped preset: piano de cola desde el publico, con la sala
+version = 1
+name = NA Magicos - Sala de concierto
+scope = all
+state.instrument = grand_a
+param.mic_position = 2
+param.room = 3
+param.dynamics = 40

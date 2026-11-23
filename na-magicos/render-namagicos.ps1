@@ -6,6 +6,7 @@
 #   .\render-namagicos.ps1 -Midi .\pieza.mid -Limitar            (llega a -14 LUFS con limitador suave)
 #   .\render-namagicos.ps1 -Midi .\pieza.mid -Fps 60              (mas fluido, tarda el doble)
 #   .\render-namagicos.ps1 -Midi .\pieza.mid -Pad -Limitar       (agrega pad bajo el piano; -PadDb -9 lo sube)
+#   .\render-namagicos.ps1 -Midi .\pieza.mid -Pad -PadEstilo cuerdas   (calido, cuerdas, coro, brillante, atmosfera)
 #   .\render-namagicos.ps1 -Midi .\pieza.mid -Tema Clasico        (visual original; Deco requiere la version de tu fork)
 #   .\render-namagicos.ps1 -Midi .\pieza.mid -SinFondo            (sin el arte de portada: cuerdas animadas)
 param(
@@ -19,6 +20,7 @@ param(
     [switch]$Limitar,
     [switch]$Pad,
     [double]$PadDb = -11,
+    [ValidateSet('calido', 'cuerdas', 'coro', 'brillante', 'atmosfera')][string]$PadEstilo = 'calido',
     [ValidateSet('Deco', 'Clasico')][string]$Tema = 'Deco',
     [string]$Fondo = "$PSScriptRoot\na-magicos\arte_portada_hd.png",
     [switch]$SinFondo
@@ -80,7 +82,7 @@ if ($Pad) {
     if (-not (Get-Command py -ErrorAction SilentlyContinue)) { Fail "Falta Python. Instala con: winget install Python.Python.3.12" }
     $padLvl = $PadDb.ToString($inv)
     Write-Host "[+]   Generando pad ($PadDb dB bajo el piano)..." -ForegroundColor Cyan
-    & py -3 $padPy $Midi "$base.pad.wav" --mezclar-con $raw --salida-mezcla $raw "--nivel=$padLvl" 2>&1 | ForEach-Object { Write-Host "      $_" }
+    & py -3 $padPy $Midi "$base.pad.wav" --mezclar-con $raw --salida-mezcla $raw "--nivel=$padLvl" "--estilo=$PadEstilo" 2>&1 | ForEach-Object { Write-Host "      $_" }
     if ($LASTEXITCODE -ne 0) { Fail "No se pudo generar el pad (revisa: py -3 -m pip install numpy scipy mido soundfile)" }
 }
 

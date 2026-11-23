@@ -1,0 +1,6 @@
+# NA_Magicos shipped preset: marimba seca y alegre
+version = 1
+name = NA Magicos - Marimba tropical
+scope = all
+state.instrument = marimba
+param.room = -12

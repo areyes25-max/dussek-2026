@@ -75,11 +75,32 @@ def voz(clases, grave):
     return notas, bajo
 
 
-def sintetizar(segmentos, dur, sr, brillo):
+# los estilos de pad: brillo (Hz), ataque y caida (s), caida de los armonicos, desafinacion (cents),
+# formantes (Hz, para el coro) y mezcla de reverb
+ESTILOS = {
+    'calido':    dict(brillo=1400, ataque=0.9, caida=1.8, arm=1.6, det=7,  formantes=None,        rev=0.45),
+    'cuerdas':   dict(brillo=2600, ataque=1.4, caida=2.2, arm=1.1, det=11, formantes=None,        rev=0.50),
+    'coro':      dict(brillo=2200, ataque=1.2, caida=2.0, arm=1.0, det=6,  formantes=(700, 1150), rev=0.55),
+    'brillante': dict(brillo=3800, ataque=0.4, caida=1.2, arm=0.75, det=9,  formantes=None,        rev=0.40),
+    'atmosfera': dict(brillo=900,  ataque=2.5, caida=4.0, arm=2.0, det=14, formantes=None,        rev=0.70),
+}
+
+
+def formantes(x, sr, picos):
+    """Realza dos formantes de vocal ('aa') para que el pad suene a coro."""
+    from numpy.fft import rfft, irfft, rfftfreq
+    f = rfftfreq(len(x), 1 / sr)
+    h = 0.35 + sum(np.exp(-0.5 * ((f - p) / (p * 0.18)) ** 2) for p in picos)
+    out = np.empty_like(x)
+    for c in range(x.shape[1]):
+        out[:, c] = irfft(rfft(x[:, c]) * h, len(x))
+    return out
+
+
+def sintetizar(segmentos, dur, sr, brillo, ataque=0.9, caida=1.8, arm=1.6, det=7):
     n = int(dur * sr)
     L, R = np.zeros(n), np.zeros(n)
     t_all = np.arange(n) / sr
-    ataque, caida = 0.9, 1.8
     for (t0, t1, notas, bajo) in segmentos:
         i0, i1 = int(t0 * sr), min(n, int((t1 + caida) * sr))
         if i1 <= i0:
@@ -92,14 +113,14 @@ def sintetizar(segmentos, dur, sr, brillo):
         for k, m in enumerate(notas + ([bajo] if bajo is not None else [])):
             f = 440 * 2 ** ((m - 69) / 12)
             amp = (0.10 if m != bajo else 0.035) / max(1, len(notas)) ** 0.5
-            for det, pan in ((-7, 0.25), (0, 0.5), (7, 0.75)):  # 3 voces desafinadas (cents), abiertas en estereo
-                fd = f * 2 ** (det / 1200)
+            for dc, pan in ((-det, 0.25), (0, 0.5), (det, 0.75)):  # 3 voces desafinadas (cents), abiertas en estereo
+                fd = f * 2 ** (dc / 1200)
                 ph = np.random.rand() * 2 * np.pi
                 # sierra suave con pocos armonicos (banda limitada) + seno
                 s = np.sin(2 * np.pi * fd * t + ph)
                 for h in range(2, 7):
                     if fd * h < brillo * 1.6:
-                        s += np.sin(2 * np.pi * fd * h * t + ph * h) / (h ** 1.6)
+                        s += np.sin(2 * np.pi * fd * h * t + ph * h) / (h ** arm)
                 s *= amp * env
                 L[i0:i1] += s * (1 - pan)
                 R[i0:i1] += s * pan
@@ -174,7 +195,8 @@ def main():
     ap.add_argument('salida')
     ap.add_argument('--sr', type=int, default=48000)
     ap.add_argument('--ventana', type=float, default=0.5, help='segundos por analisis de acorde')
-    ap.add_argument('--brillo', type=float, default=1400, help='corte del filtro (Hz)')
+    ap.add_argument('--brillo', type=float, default=None, help='corte del filtro (Hz); por defecto el del estilo')
+    ap.add_argument('--estilo', choices=sorted(ESTILOS), default='calido', help='color del pad')
     ap.add_argument('--tail', type=float, default=6.0)
     ap.add_argument('--mezclar-con', default=None, help='WAV del piano para mezclar debajo')
     ap.add_argument('--salida-mezcla', default=None)
@@ -194,11 +216,15 @@ def main():
         else:
             nv, bajo = voz(cl, grave)
             segs.append([t0, t1, nv, bajo, cl])
-    print(f'{len(notas)} notas, {len(segs)} acordes de pad, {fin:.1f} s')
-    x = sintetizar([(s[0], s[1], s[2], s[3]) for s in segs], dur, a.sr, a.brillo)
-    x = filtro_paso_bajo(x, a.sr, a.brillo)
+    print(f'{len(notas)} notas, {len(segs)} acordes de pad, {fin:.1f} s, estilo {a.estilo}')
+    e = ESTILOS[a.estilo]
+    brillo = a.brillo or e['brillo']
+    x = sintetizar([(s[0], s[1], s[2], s[3]) for s in segs], dur, a.sr, brillo, e['ataque'], e['caida'], e['arm'], e['det'])
+    x = filtro_paso_bajo(x, a.sr, brillo)
+    if e['formantes']:
+        x = formantes(x, a.sr, e['formantes'])
     x = coro(x, a.sr)
-    x = reverb(x, a.sr)
+    x = reverb(x, a.sr, segundos=4.5 if a.estilo != 'atmosfera' else 7.0, mezcla=e['rev'])
     pk = np.max(np.abs(x))
     if pk > 0:
         x *= 0.5 / pk  # el nivel final lo fija la mezcla

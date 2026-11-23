@@ -39,14 +39,11 @@ oficiales y deja `%USERPROFILE%\FlexASIO.toml` (WASAPI compartido, 128 muestras,
 pestaña MIDI → Audio engine: ASIO → Audio device: ASIO4ALL v2 o FlexASIO. `compilar-dussek-na-magicos.ps1`
 compila esta versión en Windows con MSYS2 y llama al instalador si no hay drivers ASIO.
 
-## Presets (`presets/`)
+## Sonidos (presets incluidos en el programa)
 
-Copiar a `%APPDATA%\Dussek\presets\` (Windows):
-
-- **NA Magicos - Nocturno calido**: Grand B, micrófonos de audiencia, martillo más suave, sustain 115 %.
-- **NA Magicos - Lofi intimo**: Upright C, martillo muy suave, poca sala.
-
-Ambos con una curva de velocidad para el Yamaha YPG-235 (teclas sin peso).
+En `plugin/presets/dussek/`, dentro de Dussek (Sound → Preset): Nocturno calido, Lofi intimo, Seco nitido
+(sin sala: la nota se corta al soltar), Pop brillante, Sala de concierto, Balada, Vertical clasico,
+Clavecin barroco, Vibrafono jazz, Arpa celestial y Marimba tropical.
 
 ## Scripts
 

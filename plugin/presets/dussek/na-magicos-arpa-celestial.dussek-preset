@@ -1,0 +1,6 @@
+# NA_Magicos shipped preset: arpa con sala amplia
+version = 1
+name = NA Magicos - Arpa celestial
+scope = all
+state.instrument = harp
+param.room = 4

@@ -1,0 +1,6 @@
+# NA_Magicos shipped preset: clavecin para piezas barrocas
+version = 1
+name = NA Magicos - Clavecin barroco
+scope = all
+state.instrument = harpsichord
+param.room = -6

@@ -7507,7 +7507,11 @@ TEST(each_plugin_keeps_its_own_presets)
     std::vector<std::string> names;
     for (const Preset* p : shippedFullPresets(PluginKind::Keys))
         names.push_back(p->name);
-    CHECK(names == std::vector<std::string>({ "Default", "Production, bright", "Production, warm" }));
+    // NA_Magicos: the released three plus the channel's eleven sounds, every file parsed
+    const auto has = [&](const char* n) { return std::find(names.begin(), names.end(), n) != names.end(); };
+    CHECK(!names.empty() && names.front() == "Default" && has("Production, bright") && has("Production, warm"));
+    CHECK(has("NA Magicos - Seco nitido") && has("NA Magicos - Nocturno calido") && has("NA Magicos - Marimba tropical"));
+    CHECK(std::count_if(names.begin(), names.end(), [](const std::string& n) { return n.rfind("NA Magicos - ", 0) == 0; }) == 11);
     CHECK(presetParams(PluginKind::Keys, *shippedFullPresets(PluginKind::Keys)[0])[kMicPosition].second == paramInfo(kMicPosition).def);
     // no microphone preset for the bell yet: Weidinger offers none of the pianos'
     for (const Preset& p : shippedPresets(PluginKind::Winds))

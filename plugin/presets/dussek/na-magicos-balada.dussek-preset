@@ -1,0 +1,10 @@
+# NA_Magicos shipped preset: suave y redondo, poca sala
+version = 1
+name = NA Magicos - Balada
+scope = all
+state.instrument = grand_b
+state.velocity_curve = 1:10,40:46,96:104,127:122
+param.hammer_hardness = -2
+param.room = -8
+param.dynamics = 30
+param.damper_fall = 50

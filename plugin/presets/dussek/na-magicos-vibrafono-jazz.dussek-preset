@@ -1,0 +1,7 @@
+# NA_Magicos shipped preset: vibrafono con el motor encendido
+version = 1
+name = NA Magicos - Vibrafono jazz
+scope = all
+state.instrument = vibraphone
+param.motor = 1
+param.room = -6
