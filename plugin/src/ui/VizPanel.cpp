@@ -138,7 +138,8 @@ void VizPanel::draw(NanoVG& vg)
     if (fBars) drawBars(vg, now);
     else {
         drawStrings(vg, now);
-        if (fAnyHammer) drawHammers(vg, now);
+        // NA_Magicos: no row of hammers under the strings: a cleaner picture (the strings still show each strike)
+        (void)now;
     }
     vg.restore();
     vg.fillColor(theme::faint);
@@ -149,7 +150,7 @@ void VizPanel::draw(NanoVG& vg)
 void VizPanel::drawStrings(NanoVG& vg, uint64_t now)
 {
     const float pitch = fPlot.w / kKeys;
-    fFront = fPlot.y + fPlot.h - (fAnyHammer ? kHammerZone : 6.0f);
+    fFront = fPlot.y + fPlot.h - 6.0f; // NA_Magicos: the strings reach down to the keys, no hammer row
     const float room = fFront - (fPlot.y + 18);
     float longest = 0;
     for (int k = 0; k < kKeys && fHaveFrame; ++k) longest = std::max(longest, fFrame->key[k].length);

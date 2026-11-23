@@ -208,42 +208,31 @@ void DiagView::draw(NanoVG& vg)
             if (l.held) c = s.black ? skyDeep : sky;
             else if (l.ringing) c = mix(c, sky, s.black ? 0.25f : 0.18f);
             const float x = s.r.x, w = s.r.w, h = s.r.h;
-            const float dip = l.held ? 2.0f : 0.0f; // a pressed key sinks a little
-            const float y = s.r.y + dip;
+            const float y = s.r.y + (l.held ? 1.0f : 0.0f); // a pressed key sinks a hair
             if (!s.black) {
-                // an ivory natural: shaded under the fallboard, bright in the middle, its front face darker
-                const float face = std::max(3.0f, h * 0.06f);
-                vg.beginPath(); vg.roundedRect(x + 0.75f, y, std::max(0.5f, w - 1.5f), h - face - dip, 2.0f);
-                vg.fillPaint(vg.linearGradient(0, y, 0, y + h - face, mix(c, Color(0, 0, 0), 0.22f), mix(c, Color(255, 255, 255), 0.18f)));
+                // a natural: clean ivory, a soft shade under the fallboard, a thin front edge
+                vg.beginPath(); vg.roundedRect(x + 0.6f, y, std::max(0.5f, w - 1.2f), h - (y - s.r.y), 1.5f);
+                vg.fillPaint(vg.linearGradient(0, y, 0, y + h * 0.35f, mix(c, Color(0, 0, 0), 0.10f), c));
                 vg.fill();
-                vg.beginPath(); vg.roundedRect(x + 0.75f, y + h - face - dip, std::max(0.5f, w - 1.5f), face, 2.0f);
-                vg.fillColor(mix(c, Color(0, 0, 0), l.held ? 0.35f : 0.28f)); vg.fill();
-                // the light on the left edge of each key
-                vg.beginPath(); vg.rect(x + 0.75f, y, 1.0f, h - face - dip); vg.fillColor(Color(255, 255, 255, 0.35f)); vg.fill();
+                vg.beginPath(); vg.rect(x + 0.6f, s.r.y + h - 2.5f, std::max(0.5f, w - 1.2f), 2.5f);
+                vg.fillColor(mix(c, Color(0, 0, 0), 0.18f)); vg.fill();
             } else {
-                // an ebony sharp in 3D: its shadow on the naturals, the sides, the top and the glossy front
-                vg.beginPath(); vg.rect(x - 2, y, w + 7, h + 5);
-                vg.fillPaint(vg.boxGradient(x + 2, y, w, h + 2, 3, 6, Color(0, 0, 0, 0.55f), Color(0, 0, 0, 0.0f))); vg.fill();
-                vg.beginPath(); vg.roundedRect(x, y, w, h, 2.0f);
-                vg.fillColor(mix(c, Color(0, 0, 0), 0.35f)); vg.fill();               // the body, the sides showing
-                const float inset = std::max(1.5f, w * 0.14f), lip = std::max(5.0f, h * 0.16f);
-                vg.beginPath(); vg.rect(x + inset, y, w - 2 * inset, h - lip);
-                vg.fillPaint(vg.linearGradient(0, y, 0, y + h - lip, mix(c, Color(255, 255, 255), 0.06f), mix(c, Color(255, 255, 255), 0.16f)));
-                vg.fill();                                                              // the top face
-                vg.beginPath();                                                         // the front slope, catching the light
-                vg.moveTo(x + inset, y + h - lip); vg.lineTo(x + w - inset, y + h - lip);
-                vg.lineTo(x + w - 1.0f, y + h - 1.0f); vg.lineTo(x + 1.0f, y + h - 1.0f); vg.closePath();
-                vg.fillPaint(vg.linearGradient(0, y + h - lip, 0, y + h, mix(c, Color(255, 255, 255), 0.42f), mix(c, Color(255, 255, 255), 0.12f)));
+                // a sharp: ebony with a soft shadow on the naturals and a quiet highlight at its front
+                vg.beginPath(); vg.rect(x - 1, y, w + 4, h + 3);
+                vg.fillPaint(vg.boxGradient(x + 1, y, w, h + 1, 2, 4, Color(0, 0, 0, 0.35f), Color(0, 0, 0, 0.0f))); vg.fill();
+                vg.beginPath(); vg.roundedRect(x, y, w, h, 1.5f);
+                vg.fillPaint(vg.linearGradient(0, y, 0, y + h, mix(c, Color(255, 255, 255), 0.05f), mix(c, Color(255, 255, 255), 0.14f)));
                 vg.fill();
-                vg.beginPath(); vg.rect(x + inset, y + 1.0f, 1.0f, h - lip - 2.0f);    // a glint along the left
-                vg.fillColor(Color(255, 255, 255, l.held ? 0.35f : 0.18f)); vg.fill();
+                const float lip = std::max(3.0f, h * 0.10f);
+                vg.beginPath(); vg.roundedRect(x + 1.2f, y + h - lip, w - 2.4f, lip - 1.0f, 1.0f);
+                vg.fillColor(mix(c, Color(255, 255, 255), 0.22f)); vg.fill();
             }
         }
     if (!fStrip.keys.empty()) { // the fallboard over the keys: its shadow and a gold rule
         float x0 = 1e9f, x1 = -1e9f;
         for (const KeyShape& s : fStrip.keys) { x0 = std::min(x0, s.r.x); x1 = std::max(x1, s.r.x + s.r.w); }
         vg.beginPath(); vg.rect(x0, top, x1 - x0, 8);
-        vg.fillPaint(vg.linearGradient(0, top, 0, top + 8, Color(0, 0, 0, 0.45f), Color(0, 0, 0, 0.0f))); vg.fill();
+        vg.fillPaint(vg.linearGradient(0, top, 0, top + 6, Color(0, 0, 0, 0.30f), Color(0, 0, 0, 0.0f))); vg.fill();
         vg.beginPath(); vg.rect(x0, top - 1.5f, x1 - x0, 1.5f); vg.fillColor(theme::gold); vg.fill();
     }
     // a pedal that acts: a slot with a lever at its depth, its name in the header row above
