@@ -186,31 +186,65 @@ void DiagView::draw(NanoVG& vg)
     const Color black = fReversedKeys ? Color(226, 218, 200) : theme::ebony;
     // extrapolated keys (beyond the recorded ones): an amber tint on either color
     const Color amber(204, 150, 84);
+    // NA_Magicos: the keys played light up sky blue (held strongly, still ringing only faintly)
+    const Color sky(96, 190, 255), skyDeep(40, 132, 220);
+    float top = 1e9f;
+    for (const KeyShape& s : fStrip.keys) top = std::min(top, s.r.y);
+    // the gaps between the naturals: a dark bed under the keys
+    if (!fStrip.keys.empty()) {
+        const KeyShape& a = fStrip.keys.front();
+        const KeyShape& b = fStrip.keys.back();
+        vg.beginPath(); vg.rect(a.r.x, top, b.r.x + b.r.w - a.r.x, a.r.h); vg.fillColor(Color(6, 5, 4)); vg.fill();
+    }
     for (int pass = 0; pass < 2; ++pass) // white keys, then black on top
         for (int k = 0; k < kKeys; ++k) {
             const KeyShape& s = fStrip.keys[(size_t)k];
             if (s.black != (pass == 1)) continue;
             const KeyLight l = keyLight(fWords, k);
-            // held: the accent; ringing after release: a dim tint; otherwise the key's own color
             Color c = s.black ? black : white;
             if (k + 21 < fRecordedLo || k + 21 > fRecordedHi) c = mix(c, amber, s.black ? 0.4f : 0.45f);
             // keys that do not play: gray, apart from the amber, on either color
             if (k + 21 < fPlaysLo || k + 21 > fPlaysHi) c = s.black ? Color(84, 86, 90) : Color(128, 130, 134);
-            if (l.held) c = mix(c, theme::accent, 0.85f);
-            else if (l.ringing) c = mix(c, theme::accent, 0.35f);
-            vg.beginPath(); vg.rect(s.r.x + 0.5f, s.r.y, std::max(0.5f, s.r.w - 1.0f), s.r.h - 1.0f);
-            // a soft shine from the top, as lacquer and ivory catch the light
-            vg.fillPaint(vg.linearGradient(0, s.r.y, 0, s.r.y + s.r.h, mix(c, Color(255, 255, 255), s.black ? 0.10f : 0.25f), c));
-            vg.fill();
-            if (s.black && !l.held) { // a gold lip at the sharp's front edge
-                vg.beginPath(); vg.rect(s.r.x + 1.0f, s.r.y + s.r.h - 3.0f, std::max(0.5f, s.r.w - 2.0f), 1.2f);
-                vg.fillColor(Color(theme::gold, Color(0, 0, 0), 0.35f)); vg.fill();
+            if (l.held) c = s.black ? skyDeep : sky;
+            else if (l.ringing) c = mix(c, sky, s.black ? 0.25f : 0.18f);
+            const float x = s.r.x, w = s.r.w, h = s.r.h;
+            const float dip = l.held ? 2.0f : 0.0f; // a pressed key sinks a little
+            const float y = s.r.y + dip;
+            if (!s.black) {
+                // an ivory natural: shaded under the fallboard, bright in the middle, its front face darker
+                const float face = std::max(3.0f, h * 0.06f);
+                vg.beginPath(); vg.roundedRect(x + 0.75f, y, std::max(0.5f, w - 1.5f), h - face - dip, 2.0f);
+                vg.fillPaint(vg.linearGradient(0, y, 0, y + h - face, mix(c, Color(0, 0, 0), 0.22f), mix(c, Color(255, 255, 255), 0.18f)));
+                vg.fill();
+                vg.beginPath(); vg.roundedRect(x + 0.75f, y + h - face - dip, std::max(0.5f, w - 1.5f), face, 2.0f);
+                vg.fillColor(mix(c, Color(0, 0, 0), l.held ? 0.35f : 0.28f)); vg.fill();
+                // the light on the left edge of each key
+                vg.beginPath(); vg.rect(x + 0.75f, y, 1.0f, h - face - dip); vg.fillColor(Color(255, 255, 255, 0.35f)); vg.fill();
+            } else {
+                // an ebony sharp in 3D: its shadow on the naturals, the sides, the top and the glossy front
+                vg.beginPath(); vg.rect(x - 2, y, w + 7, h + 5);
+                vg.fillPaint(vg.boxGradient(x + 2, y, w, h + 2, 3, 6, Color(0, 0, 0, 0.55f), Color(0, 0, 0, 0.0f))); vg.fill();
+                vg.beginPath(); vg.roundedRect(x, y, w, h, 2.0f);
+                vg.fillColor(mix(c, Color(0, 0, 0), 0.35f)); vg.fill();               // the body, the sides showing
+                const float inset = std::max(1.5f, w * 0.14f), lip = std::max(5.0f, h * 0.16f);
+                vg.beginPath(); vg.rect(x + inset, y, w - 2 * inset, h - lip);
+                vg.fillPaint(vg.linearGradient(0, y, 0, y + h - lip, mix(c, Color(255, 255, 255), 0.06f), mix(c, Color(255, 255, 255), 0.16f)));
+                vg.fill();                                                              // the top face
+                vg.beginPath();                                                         // the front slope, catching the light
+                vg.moveTo(x + inset, y + h - lip); vg.lineTo(x + w - inset, y + h - lip);
+                vg.lineTo(x + w - 1.0f, y + h - 1.0f); vg.lineTo(x + 1.0f, y + h - 1.0f); vg.closePath();
+                vg.fillPaint(vg.linearGradient(0, y + h - lip, 0, y + h, mix(c, Color(255, 255, 255), 0.42f), mix(c, Color(255, 255, 255), 0.12f)));
+                vg.fill();
+                vg.beginPath(); vg.rect(x + inset, y + 1.0f, 1.0f, h - lip - 2.0f);    // a glint along the left
+                vg.fillColor(Color(255, 255, 255, l.held ? 0.35f : 0.18f)); vg.fill();
             }
         }
-    if (!fStrip.keys.empty()) { // the fallboard's gold rule over the keys
-        float x0 = 1e9f, x1 = -1e9f, y = 1e9f;
-        for (const KeyShape& s : fStrip.keys) { x0 = std::min(x0, s.r.x); x1 = std::max(x1, s.r.x + s.r.w); y = std::min(y, s.r.y); }
-        vg.beginPath(); vg.rect(x0, y - 1.5f, x1 - x0, 1.5f); vg.fillColor(theme::gold); vg.fill();
+    if (!fStrip.keys.empty()) { // the fallboard over the keys: its shadow and a gold rule
+        float x0 = 1e9f, x1 = -1e9f;
+        for (const KeyShape& s : fStrip.keys) { x0 = std::min(x0, s.r.x); x1 = std::max(x1, s.r.x + s.r.w); }
+        vg.beginPath(); vg.rect(x0, top, x1 - x0, 8);
+        vg.fillPaint(vg.linearGradient(0, top, 0, top + 8, Color(0, 0, 0, 0.45f), Color(0, 0, 0, 0.0f))); vg.fill();
+        vg.beginPath(); vg.rect(x0, top - 1.5f, x1 - x0, 1.5f); vg.fillColor(theme::gold); vg.fill();
     }
     // a pedal that acts: a slot with a lever at its depth, its name in the header row above
     const auto lever = [&](const Rect& r, float depth, const char* name) {
