@@ -57,6 +57,7 @@
 #include <vector>
 #include <iterator>
 #include "Effects.hpp"
+#include "PlayMode.hpp"
 
 static_assert(pe::kParamCount <= PE_TELEMETRY_VALUES, "every parameter has a slot in the value mirror");
 
@@ -407,6 +408,7 @@ protected:
             fWake.notify_one();
         if (fEngine != nullptr)
             pe_all_keys_up(fEngine);
+        fMapper.reset();
         // a non-zero UI pedal now is stale: mute it until the parameter changes (a drag sets it live again)
         fPedal.setLatch(fValues[kSustainLatch] >= 0.5f); // a setting: the engine is told below
         applyPedal(fPedal.activate(std::max(0.0f, std::min(1.0f, fValues[kDiagPedalIn]))), 0);
@@ -495,15 +497,28 @@ protected:
             const uint8_t* d = ev.data;
             const uint32_t frame = std::min(ev.frame, frames - 1);
             switch (d[0] & 0xF0) {
-            case 0x90:
-                if (ev.size >= 3)
-                    pe_note_on(fEngine, frame, d[1], d[2]);
+            case 0x90: // NA_Magicos: through the play bar (PlayMode.hpp); velocity 0 is a release
+                if (ev.size >= 3 && d[1] < 128) {
+                    if (d[2] == 0) {
+                        const PlayMapper::Notes n = fMapper.off(d[1]);
+                        for (int k = 0; k < n.count; ++k) pe_note_off(fEngine, frame, n.note[k]);
+                    } else {
+                        const PlayMapper::Notes n = fMapper.on(d[1], d[2], (int)fValues[kNaTranspose], (int)fValues[kNaKey],
+                            (int)fValues[kNaPlayMode]);
+                        for (int k = 0; k < n.count; ++k) pe_note_on(fEngine, frame, n.note[k], n.velocity[k]);
+                    }
+                }
                 break;
             case 0x80:
-                if (ev.size >= 3)
-                    pe_note_off_velocity(fEngine, frame, d[1], d[2]); // the release velocity: the damper's fall
-                else
-                    pe_note_off(fEngine, frame, d[1]);
+                if (ev.size >= 2 && d[1] < 128) {
+                    const PlayMapper::Notes n = fMapper.off(d[1]);
+                    for (int k = 0; k < n.count; ++k) {
+                        if (ev.size >= 3)
+                            pe_note_off_velocity(fEngine, frame, n.note[k], d[2]); // the release velocity: the damper's fall
+                        else
+                            pe_note_off(fEngine, frame, n.note[k]);
+                    }
+                }
                 break;
             case 0xA0: // key pressure: the clavichord's Bebung on that key
                 if (ev.size >= 3)
@@ -617,6 +632,7 @@ private:
     /// faded out and cleared too (pe_silence), else (CC123) the dampers fall
     void panic(uint32_t frame, bool silence)
     {
+        fMapper.reset();
         if (silence)
             pe_silence(fEngine);
         else
@@ -902,6 +918,7 @@ private:
     }
 
     float fValues[kTotalParams];
+    PlayMapper fMapper; // NA_Magicos: the play bar's notes (PlayMode.hpp)
     fx::Rack fFx; // NA_Magicos: the effects rack (Effects.hpp)
     std::vector<float> fInput; // the audio input summed to mono, a buffer's worth (bufferSizeChanged)
     // the UI's own state (open sections, zoom): host and UI threads only

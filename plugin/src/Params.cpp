@@ -284,6 +284,19 @@ ParamInfo make(uint32_t i)
     case kFxEqHigh: set("EQ high", "fx_eq_high", "dB", 0, -12, 12);
         p.description = "The equalizer's highs (a shelf at 8 kHz).";
         break;
+    case kNaTranspose: set("Transpose", "na_transpose", "st", 0, -12, 12);
+        p.description = "Moves every note played up or down, in semitones.";
+        p.integer = true;
+        break;
+    case kNaKey: set("Key", "na_key", nullptr, 0, 0, 11);
+        p.description = "The song's key: the chords and the melody's harmony are its own (major).";
+        p.integer = true;
+        break;
+    case kNaPlayMode: set("Play mode", "na_play_mode", nullptr, 0, 0, 2);
+        p.description = "Keyboard: each key its note. Chords: each key its chord in the key (Smart Chords). Melody: "
+                        "each note with its harmony a third below, in the key.";
+        p.integer = true;
+        break;
     case kAirAdded: set("Air added", "air_added", "%", 0, 0, 100);
         p.description = "Air on top of what the keys or the Air knob give, up to the top at 100 %. The mod wheel (CC 1) plays it.";
         break;
@@ -510,6 +523,8 @@ uint32_t paramLabelCount(uint32_t index)
     case kMallet: return kMalletCount;
     case kGlideMode: return 3;
     case kAftertouchTo: return 2;
+    case kNaKey: return 12;
+    case kNaPlayMode: return 3;
     default: return 0;
     }
 }
@@ -530,6 +545,8 @@ const char* paramLabel(uint32_t index, uint32_t value)
     case kMallet: return kMalletNumbers[value];
     case kGlideMode: return value == 0 ? "Off" : value == 1 ? "Auto" : "On";
     case kAftertouchTo: return value == 0 ? "Growl" : "Flutter";
+    case kNaKey: return kKeys[value];
+    case kNaPlayMode: return value == 0 ? "Keyboard" : value == 1 ? "Chords" : "Melody";
     default: return nullptr;
     }
 }

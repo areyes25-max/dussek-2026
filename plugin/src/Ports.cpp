@@ -22,7 +22,7 @@ Map build(PluginKind k)
     if (k == PluginKind::Keys) {
         for (uint32_t i = 0; i < kReleasedKeys; ++i)
             m.ports.push_back(i);
-        for (uint32_t i = kFxReverb; i <= kFxEqHigh; ++i) // NA_Magicos: the effects rack, after the released table
+        for (uint32_t i = kFxReverb; i <= kNaPlayMode; ++i) // NA_Magicos: the effects rack and the play bar, after the released table
             m.ports.push_back(i);
     } else {
         // what the brass plays (the controls its instruments show) and its own rows

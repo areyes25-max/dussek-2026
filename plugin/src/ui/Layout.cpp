@@ -132,7 +132,8 @@ const std::vector<TabGroup>& tabGroups(Tab t)
         { { "Reverb", { kFxReverb, kFxReverbSize } }, // NA_Magicos: the effects rack
           { "Delay", { kFxDelay, kFxDelayTime, kFxDelayFeedback } },
           { "Chorus", { kFxChorus, kFxChorusRate, kFxChorusDepth } },
-          { "EQ", { kFxEqLow, kFxEqMid, kFxEqHigh } } },
+          { "EQ", { kFxEqLow, kFxEqMid, kFxEqHigh } },
+          { "Play bar", { kNaPlayMode, kNaKey, kNaTranspose } } },
     };
     return g[t < kTabCount ? t : 0];
 }

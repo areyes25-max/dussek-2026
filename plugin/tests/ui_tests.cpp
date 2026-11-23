@@ -1,4 +1,5 @@
 #include "check.hpp"
+#include "PlayMode.hpp"
 #include "Effects.hpp"
 #include "About.hpp"
 #include "Catalog.hpp"
@@ -506,13 +507,13 @@ TEST(dussek_s_ports_are_the_released_table)
     for (size_t i = 0; i < released.size() && i < now.size(); ++i)
         CHECK(now[i].line == released[i].line);
     const std::vector<uint32_t>& p = pe::ports(pe::PluginKind::Keys);
-    CHECK(p.size() == 78 + 11); // NA_Magicos: the released table, then the effects rack
+    CHECK(p.size() == 78 + 14); // NA_Magicos: the released table, then the effects rack
     for (uint32_t i = 0; i < 78; ++i)
         CHECK(p[i] == i && pe::toHost(pe::PluginKind::Keys, i) == i);
-    for (uint32_t i = 0; i < 11; ++i)
+    for (uint32_t i = 0; i < 14; ++i)
         CHECK(p[78 + i] == pe::kFxReverb + i && pe::toHost(pe::PluginKind::Keys, pe::kFxReverb + i) == 78 + i);
-    CHECK(pe::toHost(pe::PluginKind::Keys, pe::kDiagPedalIn) == 78 + 11); // the diagnostics after the ports
-    CHECK(pe::hostCount(pe::PluginKind::Keys) == 78 + 11 + (pe::kTotalParams - pe::kParamCount)); // NA_Magicos: + the effects rack
+    CHECK(pe::toHost(pe::PluginKind::Keys, pe::kDiagPedalIn) == 78 + 14); // the diagnostics after the ports
+    CHECK(pe::hostCount(pe::PluginKind::Keys) == 78 + 14 + (pe::kTotalParams - pe::kParamCount)); // NA_Magicos: + the effects rack
 }
 
 TEST(weidinger_s_ports_are_its_lock)
@@ -587,7 +588,7 @@ TEST(no_diagnostic_is_automatable)
 
 TEST(param_table_is_complete)
 {
-    CHECK(kParamCount == 104); // NA_Magicos: + the 11 of the effects rack
+    CHECK(kParamCount == 107); // NA_Magicos: + the 11 of the effects rack
     std::set<std::string> symbols;
     for (uint32_t i = 0; i < kParamCount; ++i) {
         const ParamInfo& p = paramInfo(i);
@@ -1901,7 +1902,7 @@ TEST(sweep_ignores_an_out_of_range_owner_pid)
 
 TEST(diagnostic_parameters_extend_the_table)
 {
-    CHECK(kParamCount == 104); // NA_Magicos: + the 11 of the effects rack // the user-visible table (diagnostics come after it)
+    CHECK(kParamCount == 107); // NA_Magicos: + the 11 of the effects rack // the user-visible table (diagnostics come after it)
     CHECK((uint32_t)kDiagPedalIn == (uint32_t)kParamCount);
     CHECK((uint32_t)kTotalParams == (uint32_t)kParamCount + 25);
     for (uint32_t i = kParamCount; i < kTotalParams; ++i) {
@@ -4899,7 +4900,7 @@ TEST(every_parameter_that_acts_shows_in_the_command_line)
                 for (uint32_t p = 0; p < kParamCount; ++p) {
                     if (p == kMicPosition || p == kPrepMode || p == kAudioInput || !paramVisible(p, ctx))
                         continue;
-                    if (p >= kFxReverb && p <= kFxEqHigh) // NA_Magicos: the plugin's effects rack, not the engine's
+                    if (p >= kFxReverb && p <= kNaPlayMode) // NA_Magicos: the plugin's effects rack, not the engine's
                         continue;
                     std::vector<float> v = defaults(profile, mic, prep);
                     if (p == kTemperamentKey)
@@ -7536,7 +7537,7 @@ TEST(each_plugin_keeps_its_own_presets)
         v[i] = paramInfo(i).def;
     const Preset f = presetFrom(PluginKind::Winds, "Mine", PresetScope::All, 0, v, {});
     CHECK(f.values.size() == pe::ports(PluginKind::Winds).size());
-    CHECK(presetFrom(PluginKind::Keys, "Mine", PresetScope::All, 0, v, {}).values.size() == 78 + 11);
+    CHECK(presetFrom(PluginKind::Keys, "Mine", PresetScope::All, 0, v, {}).values.size() == 78 + 14);
 }
 
 TEST(a_learned_tie_wins_over_brass_s_default)
@@ -7870,4 +7871,51 @@ TEST(na_magicos_effects_rack_acts)
     float cp = 0; double diff = 0;
     for (size_t i = n / 2; i < n; ++i) { cp = std::max(cp, std::fabs(l[i])); diff += std::fabs(l[i] - r[i]); }
     CHECK(cp < 1.0f && diff > 1.0);
+}
+
+// NA_Magicos: the play bar's notes (PlayMode.hpp)
+TEST(na_magicos_play_modes)
+{
+    PlayMapper m;
+    // Keyboard: the key, transposed
+    PlayMapper::Notes n = m.on(60, 100, 2, 0, 0);
+    CHECK(n.count == 1 && n.note[0] == 62 && n.velocity[0] == 100);
+    n = m.off(60);
+    CHECK(n.count == 1 && n.note[0] == 62);
+    // Chords in C: C major on C, D minor on D, B diminished on B, a major triad off the scale
+    n = m.on(60, 100, 0, 0, 1);
+    CHECK(n.count == 3 && n.note[0] == 60 && n.note[1] == 64 && n.note[2] == 67);
+    m.off(60);
+    n = m.on(62, 100, 0, 0, 1);
+    CHECK(n.count == 3 && n.note[1] == 65 && n.note[2] == 69);
+    m.off(62);
+    n = m.on(71, 100, 0, 0, 1);
+    CHECK(n.count == 3 && n.note[1] == 74 && n.note[2] == 77);
+    m.off(71);
+    n = m.on(61, 100, 0, 0, 1);
+    CHECK(n.count == 3 && n.note[1] == 65 && n.note[2] == 68);
+    m.off(61);
+    // in G: F# is the scale's (F# diminished), F is not (F major)
+    n = m.on(66, 100, 0, 7, 1);
+    CHECK(n.count == 3 && n.note[1] == 69 && n.note[2] == 72);
+    m.off(66);
+    // Melody: a third below in the key (E over C, C over A)
+    n = m.on(64, 100, 0, 0, 2);
+    CHECK(n.count == 2 && n.note[1] == 60);
+    m.off(64);
+    n = m.on(69, 100, 0, 0, 2);
+    CHECK(n.count == 2 && n.note[1] == 65);
+    m.off(69);
+    // a note two keys share sounds until both are up; the mode changed while holding leaves nothing hanging
+    n = m.on(60, 100, 0, 0, 1); // C E G
+    PlayMapper::Notes o = m.on(64, 100, 0, 0, 0); // E alone
+    CHECK(o.count == 1 && o.note[0] == 64);
+    n = m.off(60);
+    CHECK(n.count == 2 && n.note[0] == 60 && n.note[1] == 67); // E still held by the other key
+    n = m.off(64);
+    CHECK(n.count == 1 && n.note[0] == 64);
+    // the edges: nothing outside 0 … 127
+    n = m.on(127, 100, 5, 0, 1);
+    CHECK(n.count == 0);
+    m.off(127);
 }

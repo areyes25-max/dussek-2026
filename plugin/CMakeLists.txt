@@ -85,7 +85,7 @@ foreach(p ${PE_PLUGINS})
     UI_TYPE opengl
     USE_FILE_BROWSER
     FILES_DSP src/PianoPlugin.cpp
-    FILES_UI src/ui/PianoUI.cpp src/ui/Widgets.cpp src/ui/Panel.cpp src/ui/DiagView.cpp src/ui/DiagPanel.cpp src/ui/VizPanel.cpp src/ui/MicView.cpp)
+    FILES_UI src/ui/PianoUI.cpp src/ui/HomeView.cpp src/ui/Widgets.cpp src/ui/Panel.cpp src/ui/DiagView.cpp src/ui/DiagPanel.cpp src/ui/VizPanel.cpp src/ui/MicView.cpp)
   target_include_directories(${p} PUBLIC src src/plugins/${p})
   target_link_libraries(${p} PUBLIC Threads::Threads ${CMAKE_DL_LIBS} m)
   # the standalone's `render` command (midi2wav's code through pe_cli), before DPF's main, and

@@ -36,6 +36,8 @@
 #include "StateVersion.hpp"
 #include "UiState.hpp"
 #include "Widgets.hpp"
+#include "HomeView.hpp"
+#include "Bevel.hpp"
 #include "Working.hpp"
 
 #include <algorithm>
@@ -296,6 +298,20 @@ protected:
         glClear(GL_STENCIL_BUFFER_BIT);
         const float s = uiScale();
         beginPath(); rect(0, 0, getWidth(), getHeight()); fillColor(theme::bg); fill();
+        if (fHome) { // NA_Magicos: the Home screen above the keyboard
+            save();
+            scale(s, s);
+            scissor(0, 0, getWidth() / s, viewHeight());
+            fontFaceId(0);
+            fHomeView.draw(*this, homeModel());
+            restore();
+            save();
+            scale(s, s);
+            fontFaceId(0);
+            fDiag.draw(*this);
+            restore();
+            return;
+        }
         drawCoverArt();
         save();
         scale(s, s);
@@ -379,7 +395,7 @@ protected:
         // window-logical (not scrolled); a release reaches the strip wherever the pointer is
         const float wx = (float)ev.pos.getX() / uiScale(), wy = (float)ev.pos.getY() / uiScale();
         if (ev.button == kMouseButtonRight && ev.press)
-            return rightClick(wx, wy);
+            return fHome && wy < viewHeight() ? true : rightClick(wx, wy);
         if (ev.button != 1)
             return false;
         fMods = ev.mod;
@@ -395,8 +411,14 @@ protected:
             if (fEditParam >= 0) commitEdit();
             if (listOpen()) { fListParam = -1; closeMenu(); repaint(); }
         }
+        if (fHomeDrag >= 0 && !ev.press) { fHomeDrag = -1; endHomeDrag(); repaint(); return true; }
         if (fDiag.mouse(ev.press, wx, wy))
             return true;
+        if (fHome) {
+            if (ev.press && wy < viewHeight()) homePress(wx, wy);
+            return true;
+        }
+        if (ev.press && fHomeButton.w > 0 && fHomeButton.contains(wx, wy)) { goHome(); return true; }
         if (!ev.press) {
             endControlDrag();
             repaint();
@@ -471,6 +493,15 @@ protected:
                 fListScroll = listScrollAtThumb(fListRect, (uint32_t)fListItems.size(), wy - fBarGrab);
             repaint();
             return true;
+        }
+        if (fHome && fHomeDrag >= 0) { homeDrag(wx, wy); return true; }
+        if (fHome && wy < viewHeight()) {
+            const int hot = fHomeView.at(wx, wy);
+            if (hot != fHomeHot) { fHomeHot = hot; repaint(); }
+        }
+        if (!fHome) {
+            const bool hb = fHomeButton.contains(wx, wy);
+            if (hb != fHomeButtonHot) { fHomeButtonHot = hb; repaint(); }
         }
         // a control's drag keeps the pointer even over the diagnostics
         if (fDragParam < 0 && !micDragging() && fCurveDrag < 0 && fFeltDrag < 0 && fDiag.motion(wx, wy)) {
@@ -557,6 +588,13 @@ protected:
     bool onScroll(const ScrollEvent& ev) override
     {
         const float wx = (float)ev.pos.getX() / uiScale(), wy = (float)ev.pos.getY() / uiScale();
+        if (fHome && wy < viewHeight()) { // NA_Magicos: the wheel turns a knob, moves the volume
+            const int a = fHomeView.at(wx, wy);
+            const float step = (float)ev.delta.getY() * 0.02f;
+            if (a >= home::Knob0 && a <= home::Knob3) setKnob(a - home::Knob0, knobValue(a - home::Knob0) + step, true);
+            else if (a == home::Volume) setVolumeNorm(volumeNorm() + step, true);
+            return true;
+        }
         if (listOpen()) { // an open list: the list under the pointer scrolls (a row per step), nothing beneath it
             const float px = (float)ev.delta.getY() * kRowH;
             if (subOpen() && fSubRect.contains(wx, wy))
@@ -646,33 +684,210 @@ private:
 
     /// NA_Magicos: the cover art behind the whole window (filling it, centered), under a veil that keeps
     /// the controls readable; the panels over it are a little see-through (Theme.hpp)
+    // ---- NA_Magicos: the Home screen (HomeView.hpp)
+    HomeView fHomeView;
+    bool fHome = kKind == PluginKind::Keys; // the window opens on it
+    int fHomeHot = home::None, fHomeDrag = -1;
+    float fHomeDragY = 0, fHomeDragV = 0;
+    bool fBig = false, fHomeButtonHot = false;
+    Rect fHomeButton {};
+
+    static std::vector<std::string> homeGroups(const std::vector<const InstrumentEntry*>& menu)
+    {
+        std::vector<std::string> present, out;
+        for (const InstrumentEntry* e : menu)
+            if (std::find(present.begin(), present.end(), e->group) == present.end()) present.push_back(e->group);
+        for (const char* g : { "Grand pianos", "Upright pianos", "Harpsichords", "Harps", "Percussion", "Guitars" })
+            if (out.size() < 4 && std::find(present.begin(), present.end(), g) != present.end()) out.push_back(g);
+        for (const std::string& g : present)
+            if (out.size() < 4 && std::find(out.begin(), out.end(), g) == out.end()) out.push_back(g);
+        return out;
+    }
+
+    float knobValue(int i) const
+    {
+        switch (i) {
+        case 0: return fValues[kFxReverb] / 100.0f;
+        case 1: return fValues[kFxDelay] / 100.0f;
+        case 2: return fValues[kFxChorus] / 100.0f;
+        default: return (fValues[kFxEqHigh] + 12.0f) / 24.0f;
+        }
+    }
+    /// the EQ knob tilts: its value the highs, half of it the other way in the bass
+    void setKnob(int i, float v, bool bracket)
+    {
+        v = std::clamp(v, 0.0f, 1.0f);
+        const uint32_t p = i == 0 ? kFxReverb : i == 1 ? kFxDelay : i == 2 ? kFxChorus : kFxEqHigh;
+        if (bracket) editParameter(p, true);
+        if (i < 3) setParam(p, std::round(v * 100.0f));
+        else {
+            const float t = std::round((v * 24.0f - 12.0f) * 2.0f) / 2.0f;
+            if (bracket) editParameter(kFxEqLow, true);
+            setParam(kFxEqHigh, t);
+            setParam(kFxEqLow, -t / 2.0f);
+            if (bracket) editParameter(kFxEqLow, false);
+        }
+        if (bracket) editParameter(p, false);
+    }
+    float volumeNorm() const { const ParamInfo& p = paramInfo(kVolume); return (fValues[kVolume] - p.min) / (p.max - p.min); }
+    void setVolumeNorm(float v, bool bracket)
+    {
+        const ParamInfo& p = paramInfo(kVolume);
+        if (bracket) editParameter(kVolume, true);
+        setParam(kVolume, std::round((p.min + std::clamp(v, 0.0f, 1.0f) * (p.max - p.min)) * 10.0f) / 10.0f);
+        if (bracket) editParameter(kVolume, false);
+    }
+
+    HomeModel homeModel()
+    {
+        HomeModel m;
+        m.w = getWidth() / uiScale();
+        m.h = viewHeight();
+        const InstrumentEntry& e = entry();
+        m.instrument = e.name.empty() ? std::string("No instrument") : e.name;
+        m.group = e.group;
+        m.groups = homeGroups(fCatalog->menu(kKind));
+        for (size_t i = 0; i < m.groups.size(); ++i)
+            if (m.groups[i] == e.group) m.groupIndex = (int)i;
+        char t[48];
+        for (int i = 0; i < 4; ++i) {
+            m.knob[i] = knobValue(i);
+            if (i < 3) std::snprintf(t, sizeof t, "%.0f %%", m.knob[i] * 100.0f);
+            else if (fValues[kFxEqHigh] == 0.0f) std::snprintf(t, sizeof t, "Flat");
+            else std::snprintf(t, sizeof t, "%s %.1f dB", fValues[kFxEqHigh] > 0 ? "Bright +" : "Warm ", std::fabs(fValues[kFxEqHigh]));
+            m.knobText[i] = t;
+        }
+        m.mode = (int)fValues[kNaPlayMode];
+        m.transpose = (int)fValues[kNaTranspose];
+        m.key = (int)fValues[kNaKey];
+        m.volumeNorm = volumeNorm();
+        if (fValues[kVolume] <= paramInfo(kVolume).min) std::snprintf(t, sizeof t, "Off");
+        else std::snprintf(t, sizeof t, "%.1f dB", fValues[kVolume]);
+        m.volumeText = t;
+        m.hot = fHomeHot;
+        m.big = fBig;
+        return m;
+    }
+
+    void goHome() { fHome = true; fListParam = -1; closeMenu(); fHomeHot = home::None; repaint(); }
+    void goClassic(Tab t)
+    {
+        fHome = false;
+        selectTab(t);
+        relayout();
+        repaint();
+    }
+
+    void stepInstrument(int dir, const std::string& inGroup)
+    {
+        std::vector<const InstrumentEntry*> menu = fCatalog->menu(kKind);
+        if (!inGroup.empty()) {
+            std::vector<const InstrumentEntry*> g;
+            for (const InstrumentEntry* e : menu) if (e->group == inGroup) g.push_back(e);
+            menu = g;
+        }
+        if (menu.empty()) return;
+        int at = -1;
+        for (size_t i = 0; i < menu.size(); ++i) if (menu[i]->id == fChoice.id) at = (int)i;
+        const int n = (int)menu.size(), next = at < 0 ? 0 : ((at + dir) % n + n) % n;
+        chooseInstrument(menu[(size_t)next]->id);
+    }
+
+    void homePress(float x, float y)
+    {
+        const int a = fHomeView.at(x, y);
+        using namespace home;
+        switch (a) {
+        case NavHome: break;
+        case NavPiano: goClassic(kTabSound); break;
+        case NavSounds:
+        case SeeAll:
+            goClassic(kTabSound);
+            if (const Row* r = rowFor(kInstrumentRow)) openList(*r);
+            break;
+        case NavEffects: goClassic(kTabEffects); break;
+        case NavHall: goClassic(kTabMics); break;
+        case Settings: goClassic(kTabSound); break;
+        case Bigger: {
+            fBig = !fBig;
+            const double s = uiScale();
+            const double w = fBig ? 1600 : kDefaultWidth, h = fBig ? 900 : kDefaultHeight;
+            setSize((uint)(w * s), (uint)((h + fDiag.height()) * s));
+            break;
+        }
+        case InstPrev: stepInstrument(-1, ""); break;
+        case InstNext: stepInstrument(1, ""); break;
+        case Group0: case Group1: case Group2: case Group3: {
+            const std::vector<std::string> g = homeGroups(fCatalog->menu(kKind));
+            const size_t i = (size_t)(a - Group0);
+            if (i < g.size()) stepInstrument(entry().group == g[i] ? 1 : 0, g[i]);
+            break;
+        }
+        case Knob0: case Knob1: case Knob2: case Knob3: {
+            fHomeDrag = a;
+            fHomeDragY = y;
+            fHomeDragV = knobValue(a - Knob0);
+            const int i = a - Knob0;
+            editParameter(i == 0 ? kFxReverb : i == 1 ? kFxDelay : i == 2 ? kFxChorus : kFxEqHigh, true);
+            if (i == 3) editParameter(kFxEqLow, true);
+            break;
+        }
+        case Volume:
+            fHomeDrag = a;
+            editParameter(kVolume, true);
+            homeDrag(x, y);
+            break;
+        case SmartChords: setParam(kNaPlayMode, fValues[kNaPlayMode] == 1.0f ? 0.0f : 1.0f); break;
+        case ModeKeyboard: case ModeChords: case ModeMelody: setParam(kNaPlayMode, (float)(a - ModeKeyboard)); break;
+        case TransDown: setParam(kNaTranspose, fValues[kNaTranspose] - 1); break;
+        case TransUp: setParam(kNaTranspose, fValues[kNaTranspose] + 1); break;
+        case KeyPrev: setParam(kNaKey, (float)(((int)fValues[kNaKey] + 11) % 12)); break;
+        case KeyNext: setParam(kNaKey, (float)(((int)fValues[kNaKey] + 1) % 12)); break;
+        default: break; // Auto Accompaniment, One Touch Play: not built yet (they say so)
+        }
+        repaint();
+    }
+
+    void homeDrag(float x, float y)
+    {
+        using namespace home;
+        if (fHomeDrag >= Knob0 && fHomeDrag <= Knob3) {
+            const float fine = (fMods & kModifierShift) ? 0.25f : 1.0f;
+            setKnob(fHomeDrag - Knob0, fHomeDragV + (fHomeDragY - y) / 180.0f * fine, false);
+        } else if (fHomeDrag == Volume) {
+            const Rect& t = fHomeView.volumeTrack();
+            if (t.w > 0) setVolumeNorm((x - t.x) / t.w, false);
+        }
+        repaint();
+    }
+
+    void endHomeDrag()
+    {
+        for (uint32_t p : { (uint32_t)kFxReverb, (uint32_t)kFxDelay, (uint32_t)kFxChorus, (uint32_t)kFxEqHigh, (uint32_t)kFxEqLow, (uint32_t)kVolume })
+            editParameter(p, false);
+    }
+
     /// NA_Magicos: the name in the header, centered in the free space between the Sustain latch and the
     /// Volume (only where it fits): gold letters spaced wide, a fine line under them
     void drawBrand()
     {
+        // NA_Magicos: in the classic view the header's free space holds the way back to the Home screen
         float left = -1, right = -1, y = 0, h = 0;
         for (const Row& r : fLayout.rows) {
             if (r.param == kSustainLatch) { left = r.rect.x + r.rect.w; y = r.rect.y; h = r.rect.h; }
             if (r.param == kVolume) right = r.rect.x;
         }
-        if (left < 0 || right < 0 || right - left < 120) return;
-        const float cx = (left + right) / 2, cy = y + h / 2;
-        const bool wide = right - left >= 220;
-        fontSize(wide ? 19 : 15);
-        textLetterSpacing(wide ? 4.0f : 2.0f);
+        fHomeButton = {};
+        if (kKind != PluginKind::Keys || left < 0 || right < 0 || right - left < 90) return;
+        const float bw = std::min(150.0f, right - left - 24), bx = (left + right) / 2 - bw / 2;
+        fHomeButton = { bx, y + 2, bw, h - 4 };
+        bevel::raised(*this, fHomeButton.x, fHomeButton.y, fHomeButton.w, fHomeButton.h, fHomeButton.h / 2, true, fHomeButtonHot);
+        fontSize(14);
+        textLetterSpacing(2.0f);
         textAlign(NanoVG::Align(NanoVG::ALIGN_CENTER | NanoVG::ALIGN_MIDDLE));
-        fillColor(Color(0, 0, 0, 0.6f));
-        text(cx + 1, cy, "NA-MAGICO", nullptr);
-        fillPaint(linearGradient(0, cy - 10, 0, cy + 8, Color(255, 226, 150), Color(196, 148, 60)));
-        text(cx, cy - 1, "NA-MAGICO", nullptr);
+        fillColor(Color(34, 22, 6));
+        text(bx + bw / 2, y + h / 2, "HOME", nullptr);
         textLetterSpacing(0.0f);
-        beginPath(); rect(cx - 70, cy + 11, 140, 1);
-        fillPaint(linearGradient(cx - 70, 0, cx + 70, 0, Color(212, 175, 90, 0.0f), Color(212, 175, 90, 0.0f)));
-        fill();
-        beginPath(); rect(cx - 70, cy + 11, 70, 1);
-        fillPaint(linearGradient(cx - 70, 0, cx, 0, Color(212, 175, 90, 0.0f), Color(212, 175, 90, 0.9f))); fill();
-        beginPath(); rect(cx, cy + 11, 70, 1);
-        fillPaint(linearGradient(cx, 0, cx + 70, 0, Color(212, 175, 90, 0.9f), Color(212, 175, 90, 0.0f))); fill();
     }
 
     void drawCoverArt()

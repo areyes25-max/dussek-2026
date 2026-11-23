@@ -89,3 +89,6 @@
 86 fx_eq_low -12 12 0 dB a
 87 fx_eq_mid -12 12 0 dB a
 88 fx_eq_high -12 12 0 dB a
+89 na_transpose -12 12 0 st ai
+90 na_key 0 11 0 - ai
+91 na_play_mode 0 2 0 - ai

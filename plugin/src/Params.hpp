@@ -37,6 +37,8 @@ enum Param : uint32_t {
     // NA_Magicos: the effects rack on the output (Effects.hpp)
     kFxReverb, kFxReverbSize, kFxDelay, kFxDelayTime, kFxDelayFeedback, kFxChorus, kFxChorusRate, kFxChorusDepth,
     kFxEqLow, kFxEqMid, kFxEqHigh,
+    // NA_Magicos: the play bar (PlayMode.hpp): transpose, the key, Keyboard / Chords / Melody
+    kNaTranspose, kNaKey, kNaPlayMode,
     kParamCount
 };
 // per microphone pattern, yaw, pitch are consecutive: kMicLPattern + 3 * i + { 0, 1, 2 }
